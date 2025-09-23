@@ -92,4 +92,4 @@ Customize training parameters in `train_config.yaml`:
 
 ## License
 
-This project is for personal project
+For personal project only
