@@ -1,0 +1,82 @@
+
+#Addressing poor performance issues
+
+# Dataset configuration
+data: C:\Users\Brick\Desktop\Annotated Data\yolo_dataset\dataset.yaml
+
+# Model configuration
+model: yolo11m.pt  # YOLOv11m - latest and most improved
+
+# Training parameters
+epochs: 100         # Extended for Dataset 9 base model
+patience: 15       # Strict early stopping to prevent overfitting
+batch: 8           # Further reduced for shared GPU usage (~60-70% GPU)
+imgsz: 640         # Reduced resolution for shared usage (4x less memory)
+device: 0
+optimizer: auto
+
+# FIXED: Lower learning rates
+
+#Ignored if optimizer is auto
+#lr0: 0.001         # Much lower initial LR
+#lrf: 0.1           # Higher final LR ratio
+#momentum: 0.937
+
+weight_decay: 0.0005
+warmup_epochs: 5   # More warmup
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+# FIXED: Adjusted loss weights for class imbalance
+box: 7.5
+cls: 1.5           # Increased from 0.5 for better classification
+dfl: 1.5
+
+# REDUCED augmentations for debugging
+hsv_h: 0.01        # Reduced
+hsv_s: 0.3         # Much reduced
+hsv_v: 0.2         # Much reduced
+
+# MINIMAL geometric augmentations
+degrees: 0
+translate: 0.05    # Reduced
+scale: 0.2         # Much reduced
+shear: 0
+perspective: 0
+
+# MINIMAL flipping
+flipud: 0
+fliplr: 0.2        # Reduced
+
+# REDUCED advanced augmentations
+mosaic: 0.5        # Reduced from 1.0
+mixup: 0.0         # Disabled for debugging
+copy_paste: 0.0    # Disabled for debugging
+
+# Other training settings
+amp: true          # Keep for memory efficiency
+fraction: 1.0
+profile: false
+freeze: 0
+workers: 4         # Reduced workers for less CPU/memory usage
+cache: true        # Cache images for faster training
+
+# Save settings
+save: true
+save_period: 10    # Save more frequently
+exist_ok: true
+pretrained: true
+verbose: true
+
+# ADJUSTED validation settings
+val: true
+split: val
+conf: 0.25         # Higher confidence threshold
+iou: 0.45          # Lower IoU for stricter NMS
+max_det: 300
+single_cls: false
+rect: true
+plots: true
+
+# Additional debugging settings
+save_json: true    # Enable for detailed analysis

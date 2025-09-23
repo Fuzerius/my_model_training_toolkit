@@ -1,0 +1,86 @@
+# Ignore all directories and their contents
+*/
+
+# But keep specific file types
+!*.py
+!*.txt
+!*.yaml
+!*.yml
+!*.md
+!*.gitignore
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# PyTorch model files (if you want to exclude large model files)
+*.pt
+*.pth
+*.ckpt
+
+# Large data files (uncomment if needed)
+# *.mp4
+# *.avi
+# *.mov
+# *.mkv
+# *.jpg
+# *.jpeg
+# *.png
+# *.zip
+
+# Local configuration that shouldn't be shared
+config.local.*
+secrets.txt
+.env
