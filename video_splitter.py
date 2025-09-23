@@ -160,12 +160,12 @@ def ensure_output_directory(base_path):
     if not output_path.exists():
         try:
             output_path.mkdir(parents=True, exist_ok=True)
-            print(f"📁 Created main output directory: {output_dir}")
+            print(f"FOLDER Created main output directory: {output_dir}")
         except Exception as e:
-            print(f"❌ Error creating output directory: {e}")
+            print(f"ERROR Error creating output directory: {e}")
             return None
     else:
-        print(f"📁 Using main output directory: {output_dir}")
+        print(f"FOLDER Using main output directory: {output_dir}")
     return output_dir
 
 def create_video_output_directory(main_output_dir, video_path):
@@ -186,12 +186,12 @@ def create_video_output_directory(main_output_dir, video_path):
     if not video_output_path.exists():
         try:
             video_output_path.mkdir(parents=True, exist_ok=True)
-            print(f"  📁 Created folder: {video_name}")
+            print(f"  FOLDER Created folder: {video_name}")
         except Exception as e:
-            print(f"  ❌ Error creating video directory: {e}")
+            print(f"  ERROR Error creating video directory: {e}")
             return None
     else:
-        print(f"  📁 Using folder: {video_name}")
+        print(f"  FOLDER Using folder: {video_name}")
     
     return video_output_dir
 
@@ -207,12 +207,12 @@ def split_oversized_chunk(chunk_path, video_output_dir, chunk_number):
     Returns:
         List of successfully created sub-chunks
     """
-    print(f"    🔄 Re-splitting oversized chunk...")
+    print(f"    PROCESSING Re-splitting oversized chunk...")
     
     # Get chunk info
     chunk_info = get_video_info(chunk_path)
     if not chunk_info:
-        print(f"    ❌ Could not get chunk information for re-splitting")
+        print(f"    ERROR Could not get chunk information for re-splitting")
         return []
     
     chunk_size = os.path.getsize(chunk_path)
@@ -223,7 +223,7 @@ def split_oversized_chunk(chunk_path, video_output_dir, chunk_number):
     num_subchunks = math.ceil(chunk_size / target_size)
     subchunk_duration = (chunk_duration / num_subchunks) * 0.95  # 5% safety margin
     
-    print(f"    📊 Splitting into {num_subchunks} sub-chunks of ~{subchunk_duration:.1f}s each")
+    print(f"    CHART Splitting into {num_subchunks} sub-chunks of ~{subchunk_duration:.1f}s each")
     
     # Get original filename parts
     chunk_path_obj = Path(chunk_path)
@@ -265,25 +265,25 @@ def split_oversized_chunk(chunk_path, video_output_dir, chunk_number):
                 subchunk_size_mb = subchunk_size / (1024 * 1024)
                 
                 if subchunk_size_mb > 100:
-                    print(f"      ⚠️  Sub-chunk still {subchunk_size_mb:.1f} MB - may need manual review")
+                    print(f"      WARNING  Sub-chunk still {subchunk_size_mb:.1f} MB - may need manual review")
                 else:
-                    print(f"      ✅ Sub-chunk: {subchunk_size_mb:.1f} MB")
+                    print(f"      SUCCESS Sub-chunk: {subchunk_size_mb:.1f} MB")
                 
                 successful_subchunks.append(subchunk_path)
             else:
-                print(f"      ❌ Failed to create sub-chunk {i+1}")
+                print(f"      ERROR Failed to create sub-chunk {i+1}")
                 
         except subprocess.CalledProcessError as e:
-            print(f"      ❌ Error creating sub-chunk {i+1}: {e}")
+            print(f"      ERROR Error creating sub-chunk {i+1}: {e}")
             continue
     
     # Remove the original oversized chunk if we successfully created sub-chunks
     if successful_subchunks:
         try:
             os.remove(chunk_path)
-            print(f"    🗑️  Removed original oversized chunk")
+            print(f"      Removed original oversized chunk")
         except Exception as e:
-            print(f"    ⚠️  Could not remove original chunk: {e}")
+            print(f"    WARNING  Could not remove original chunk: {e}")
     
     return successful_subchunks
 
@@ -298,7 +298,7 @@ def split_video(video_path, main_output_dir):
     Returns:
         True if successful, False otherwise
     """
-    print(f"\n📹 Processing: {os.path.basename(video_path)}")
+    print(f"\nVIDEO Processing: {os.path.basename(video_path)}")
     
     # Create individual directory for this video's chunks
     video_output_dir = create_video_output_directory(main_output_dir, video_path)
@@ -312,13 +312,13 @@ def split_video(video_path, main_output_dir):
     print(f"  File size: {size_mb:.1f} MB")
     
     if file_size <= MAX_FILE_SIZE:
-        print(f"  ✅ File is already under 100MB, skipping...")
+        print(f"  SUCCESS File is already under 100MB, skipping...")
         return True
     
     # Get video information
     video_info = get_video_info(video_path)
     if not video_info:
-        print(f"  ❌ Could not get video information")
+        print(f"  ERROR Could not get video information")
         return False
     
     # Calculate chunk duration
@@ -373,29 +373,29 @@ def split_video(video_path, main_output_dir):
                 chunk_size_mb = chunk_size / (1024 * 1024)
                 
                 if chunk_size_mb > 100:
-                    print(f"    ⚠️  Chunk is {chunk_size_mb:.1f} MB (over 100MB limit!)")
+                    print(f"    WARNING  Chunk is {chunk_size_mb:.1f} MB (over 100MB limit!)")
                     # Automatically re-split this oversized chunk
                     subchunks = split_oversized_chunk(output_path, video_output_dir, i+1)
                     if subchunks:
-                        print(f"    ✅ Successfully re-split into {len(subchunks)} sub-chunks")
+                        print(f"    SUCCESS Successfully re-split into {len(subchunks)} sub-chunks")
                         success_count += len(subchunks)
                     else:
-                        print(f"    ❌ Failed to re-split oversized chunk")
+                        print(f"    ERROR Failed to re-split oversized chunk")
                 else:
-                    print(f"    ✅ Created: {chunk_size_mb:.1f} MB")
+                    print(f"    SUCCESS Created: {chunk_size_mb:.1f} MB")
                     success_count += 1
             else:
-                print(f"    ❌ Failed to create chunk {i+1}")
+                print(f"    ERROR Failed to create chunk {i+1}")
                 
         except subprocess.CalledProcessError as e:
-            print(f"    ❌ Error creating chunk {i+1}: {e}")
+            print(f"    ERROR Error creating chunk {i+1}: {e}")
             continue
     
     if success_count > 0:
-        print(f"  ✅ Successfully created {success_count} chunks")
+        print(f"  SUCCESS Successfully created {success_count} chunks")
         return True
     else:
-        print(f"  ❌ Failed to create any chunks")
+        print(f"  ERROR Failed to create any chunks")
         return False
 
 def process_videos(video_files, base_path):
@@ -417,22 +417,22 @@ def process_videos(video_files, base_path):
     total_videos = len(video_files)
     successful_videos = 0
     
-    print(f"\n🎬 Processing {total_videos} video(s) for splitting...")
+    print(f"\nVIDEO Processing {total_videos} video(s) for splitting...")
     print("=" * 60)
     
     for i, video_path in enumerate(video_files, 1):
         video_name = os.path.basename(video_path)
-        print(f"\n📹 Processing video {i}/{total_videos}: {video_name}")
+        print(f"\nVIDEO Processing video {i}/{total_videos}: {video_name}")
         
         try:
             success = split_video(video_path, output_dir)
             if success:
                 successful_videos += 1
-                print(f"✅ Successfully processed: {video_name}")
+                print(f"SUCCESS Successfully processed: {video_name}")
             else:
-                print(f"❌ Failed to process: {video_name}")
+                print(f"ERROR Failed to process: {video_name}")
         except Exception as e:
-            print(f"❌ Error processing {video_name}: {e}")
+            print(f"ERROR Error processing {video_name}: {e}")
         
         # Add separator between videos
         if i < total_videos:
@@ -440,12 +440,12 @@ def process_videos(video_files, base_path):
     
     # Print final summary
     print(f"\n{'='*60}")
-    print(f"📊 PROCESSING SUMMARY")
+    print(f"CHART PROCESSING SUMMARY")
     print(f"{'='*60}")
     print(f"Total videos: {total_videos}")
-    print(f"✅ Successful: {successful_videos}")
-    print(f"❌ Failed: {total_videos - successful_videos}")
-    print(f"\n📁 All split videos saved in individual folders within: {output_dir}")
+    print(f"SUCCESS Successful: {successful_videos}")
+    print(f"ERROR Failed: {total_videos - successful_videos}")
+    print(f"\nFOLDER All split videos saved in individual folders within: {output_dir}")
     
     return successful_videos
 
@@ -454,12 +454,12 @@ def main():
     try:
         # Check if FFmpeg is available
         if not check_ffmpeg():
-            print("❌ FFmpeg is not installed or not available in PATH.")
+            print("ERROR FFmpeg is not installed or not available in PATH.")
             print("Please install FFmpeg to use this script.")
             print("Download from: https://ffmpeg.org/download.html")
             sys.exit(1)
         
-        print("✅ FFmpeg found")
+        print("SUCCESS FFmpeg found")
         
         # Get processing mode
         mode = get_processing_mode()
@@ -472,7 +472,7 @@ def main():
             file_size = os.path.getsize(video_path)
             if file_size <= MAX_FILE_SIZE:
                 size_mb = file_size / (1024 * 1024)
-                print(f"\n✅ Video is only {size_mb:.1f} MB - no splitting needed!")
+                print(f"\nSUCCESS Video is only {size_mb:.1f} MB - no splitting needed!")
                 return
             
             base_path = os.path.dirname(video_path)
@@ -491,16 +491,16 @@ def main():
         successful_videos = process_videos(video_files, base_path)
         
         if successful_videos > 0:
-            print(f"\n🎉 Successfully processed {successful_videos} video(s)!")
+            print(f"\nCOMPLETE Successfully processed {successful_videos} video(s)!")
         else:
-            print("\n❌ No videos were processed successfully.")
+            print("\nERROR No videos were processed successfully.")
             sys.exit(1)
     
     except KeyboardInterrupt:
-        print("\n\n🛑 Operation cancelled by user.")
+        print("\n\nSTOP Operation cancelled by user.")
         sys.exit(1)
     except Exception as e:
-        print(f"\n💥 Unexpected error: {e}")
+        print(f"\nERROR Unexpected error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

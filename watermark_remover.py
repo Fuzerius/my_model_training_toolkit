@@ -30,12 +30,12 @@ def ensure_output_directory(base_path):
     if not output_path.exists():
         try:
             output_path.mkdir(parents=True, exist_ok=True)
-            print(f"📁 Created output directory: {output_dir}")
+            print(f"FOLDER Created output directory: {output_dir}")
         except Exception as e:
-            print(f"❌ Error creating output directory: {e}")
+            print(f"ERROR Error creating output directory: {e}")
             return None
     else:
-        print(f"📁 Using output directory: {output_dir}")
+        print(f"FOLDER Using output directory: {output_dir}")
     return output_dir
 
 def get_processing_mode():
@@ -110,7 +110,7 @@ def get_user_input():
         base_path, video_files = get_folder_path()
     
     # Get watermark dimensions
-    print(f"\n📐 Watermark Configuration:")
+    print(f"\n Watermark Configuration:")
     while True:
         try:
             width = int(input("Enter watermark width (pixels): ").strip())
@@ -354,24 +354,24 @@ def process_multiple_videos(video_files, base_path, width, height, locations, ou
     successful_videos = 0
     failed_videos = []
     
-    print(f"\n🎬 Processing {total_videos} video(s)...")
+    print(f"\nVIDEO Processing {total_videos} video(s)...")
     print("=" * 60)
     
     for i, video_path in enumerate(video_files, 1):
         video_name = os.path.basename(video_path)
-        print(f"\n📹 Processing video {i}/{total_videos}: {video_name}")
+        print(f"\nVIDEO Processing video {i}/{total_videos}: {video_name}")
         
         try:
             success = process_video(video_path, width, height, locations, output_dir)
             if success:
                 successful_videos += 1
-                print(f"✅ Successfully processed: {video_name}")
+                print(f"SUCCESS Successfully processed: {video_name}")
             else:
                 failed_videos.append(video_name)
-                print(f"❌ Failed to process: {video_name}")
+                print(f"ERROR Failed to process: {video_name}")
         except Exception as e:
             failed_videos.append(video_name)
-            print(f"❌ Error processing {video_name}: {e}")
+            print(f"ERROR Error processing {video_name}: {e}")
         
         # Add separator between videos
         if i < total_videos:
@@ -379,18 +379,18 @@ def process_multiple_videos(video_files, base_path, width, height, locations, ou
     
     # Print final summary
     print(f"\n{'='*60}")
-    print(f"📊 PROCESSING SUMMARY")
+    print(f"CHART PROCESSING SUMMARY")
     print(f"{'='*60}")
     print(f"Total videos: {total_videos}")
-    print(f"✅ Successful: {successful_videos}")
-    print(f"❌ Failed: {len(failed_videos)}")
+    print(f"SUCCESS Successful: {successful_videos}")
+    print(f"ERROR Failed: {len(failed_videos)}")
     
     if failed_videos:
         print(f"\nFailed videos:")
         for video in failed_videos:
             print(f"  - {video}")
     
-    print(f"\n📁 All processed videos saved in: {output_dir}")
+    print(f"\nFOLDER All processed videos saved in: {output_dir}")
     
     return successful_videos, failed_videos
 
@@ -404,20 +404,20 @@ def main():
         # Ensure output directory exists in the same location as videos
         output_dir = ensure_output_directory(base_path)
         if not output_dir:
-            print("❌ Cannot create output directory. Exiting.")
+            print("ERROR Cannot create output directory. Exiting.")
             sys.exit(1)
         
         if mode == 1:
             # Single video processing
             video_path = video_files[0]
-            print(f"\n🎯 Processing single video: {os.path.basename(video_path)}")
+            print(f"\nTARGET Processing single video: {os.path.basename(video_path)}")
             success = process_video(video_path, width, height, locations, output_dir)
             
             if success:
-                print(f"\n✅ Watermark removal completed successfully!")
-                print(f"📁 Output saved in: {output_dir}")
+                print(f"\nSUCCESS Watermark removal completed successfully!")
+                print(f"FOLDER Output saved in: {output_dir}")
             else:
-                print("\n❌ Watermark removal failed.")
+                print("\nERROR Watermark removal failed.")
                 sys.exit(1)
         else:
             # Multiple video processing
@@ -427,19 +427,19 @@ def main():
             
             if successful_videos > 0:
                 if len(failed_videos) == 0:
-                    print(f"\n🎉 All {successful_videos} video(s) processed successfully!")
+                    print(f"\nCOMPLETE All {successful_videos} video(s) processed successfully!")
                 else:
-                    print(f"\n⚠️  {successful_videos} video(s) processed successfully, {len(failed_videos)} failed.")
-                print(f"📁 All outputs saved in: {output_dir}")
+                    print(f"\nWARNING  {successful_videos} video(s) processed successfully, {len(failed_videos)} failed.")
+                print(f"FOLDER All outputs saved in: {output_dir}")
             else:
-                print("\n❌ No videos were processed successfully.")
+                print("\nERROR No videos were processed successfully.")
                 sys.exit(1)
     
     except KeyboardInterrupt:
-        print("\n\n🛑 Operation cancelled by user.")
+        print("\n\nSTOP Operation cancelled by user.")
         sys.exit(1)
     except Exception as e:
-        print(f"\n💥 Unexpected error: {e}")
+        print(f"\nERROR Unexpected error: {e}")
         sys.exit(1)
 
 

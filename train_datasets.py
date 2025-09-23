@@ -14,22 +14,22 @@ from pathlib import Path
 def check_config_file(config_path='train_config.yaml'):
     """Check if training configuration file exists"""
     if Path(config_path).exists():
-        print(f"✅ Training configuration found: {config_path}")
+        print(f"SUCCESS Training configuration found: {config_path}")
         return config_path
     else:
-        print(f"❌ Configuration file {config_path} not found. YOLO will use default parameters.")
+        print(f"ERROR Configuration file {config_path} not found. YOLO will use default parameters.")
         return None
 
 def get_available_models(models_dir='models'):
     """Get list of available model files"""
     models_path = Path(models_dir)
     if not models_path.exists():
-        print(f"❌ Models directory '{models_dir}' not found.")
+        print(f"ERROR Models directory '{models_dir}' not found.")
         return []
     
     model_files = list(models_path.glob('*.pt'))
     if not model_files:
-        print(f"❌ No .pt model files found in '{models_dir}' directory.")
+        print(f"ERROR No .pt model files found in '{models_dir}' directory.")
         return []
     
     return [str(model.relative_to('.')) for model in model_files]
@@ -39,12 +39,12 @@ def get_model_selection():
     available_models = get_available_models()
     
     if not available_models:
-        print("⚠️  No models found. Using default yolo11m.pt")
+        print("WARNING  No models found. Using default yolo11m.pt")
         return 'yolo11m.pt'
     
     while True:
         try:
-            print(f"\n📦 Available models:")
+            print(f"\nPACKAGE Available models:")
             for i, model in enumerate(available_models, 1):
                 model_name = Path(model).name
                 print(f"  {i}. {model_name}")
@@ -52,21 +52,21 @@ def get_model_selection():
             choice = input(f"\nSelect a model (1-{len(available_models)}): ").strip()
             
             if not choice:
-                print("❌ Please enter a valid number.")
+                print("ERROR Please enter a valid number.")
                 continue
             
             choice_idx = int(choice) - 1
             if 0 <= choice_idx < len(available_models):
                 selected_model = available_models[choice_idx]
-                print(f"✅ Selected model: {Path(selected_model).name}")
+                print(f"SUCCESS Selected model: {Path(selected_model).name}")
                 return selected_model
             else:
-                print(f"❌ Please enter a number between 1 and {len(available_models)}")
+                print(f"ERROR Please enter a number between 1 and {len(available_models)}")
                 
         except ValueError:
-            print("❌ Please enter a valid number.")
+            print("ERROR Please enter a valid number.")
         except KeyboardInterrupt:
-            print("\n❌ Operation cancelled by user.")
+            print("\nERROR Operation cancelled by user.")
             return None
 
 def get_dataset_numbers():
@@ -75,7 +75,7 @@ def get_dataset_numbers():
         try:
             user_input = input("\nEnter dataset numbers separated by commas (e.g., 1,2,3): ").strip()
             if not user_input:
-                print("❌ Please enter at least one dataset number.")
+                print("ERROR Please enter at least one dataset number.")
                 continue
             
             # Parse comma-separated numbers
@@ -86,19 +86,19 @@ def get_dataset_numbers():
                     dataset_numbers.append(int(num_str))
             
             if not dataset_numbers:
-                print("❌ Please enter valid dataset numbers.")
+                print("ERROR Please enter valid dataset numbers.")
                 continue
                 
             # Remove duplicates and sort
             dataset_numbers = sorted(list(set(dataset_numbers)))
             
-            print(f"✅ Selected datasets: {', '.join(map(str, dataset_numbers))}")
+            print(f"SUCCESS Selected datasets: {', '.join(map(str, dataset_numbers))}")
             return dataset_numbers
             
         except ValueError:
-            print("❌ Please enter valid numbers separated by commas (e.g., 1,2,3)")
+            print("ERROR Please enter valid numbers separated by commas (e.g., 1,2,3)")
         except KeyboardInterrupt:
-            print("\n❌ Operation cancelled by user.")
+            print("\nERROR Operation cancelled by user.")
             return None
 
 def get_training_mode():
@@ -107,15 +107,15 @@ def get_training_mode():
         try:
             user_input = input("\nDo you want progressive training? (y/n): ").strip().lower()
             if user_input in ['y', 'yes']:
-                print("✅ Progressive training selected - each model will use the best.pt from the previous model")
+                print("SUCCESS Progressive training selected - each model will use the best.pt from the previous model")
                 return True
             elif user_input in ['n', 'no']:
-                print("✅ Normal training selected - each model will start from yolo11m.pt")
+                print("SUCCESS Normal training selected - each model will start from yolo11m.pt")
                 return False
             else:
-                print("❌ Please enter 'y' for yes or 'n' for no")
+                print("ERROR Please enter 'y' for yes or 'n' for no")
         except KeyboardInterrupt:
-            print("\n❌ Operation cancelled by user.")
+            print("\nERROR Operation cancelled by user.")
             return None
 
 def get_report_name():
@@ -124,7 +124,7 @@ def get_report_name():
         try:
             user_input = input("\nEnter the name for the training run (will be saved in runs/detect/[name]): ").strip()
             if not user_input:
-                print("❌ Please enter a valid name.")
+                print("ERROR Please enter a valid name.")
                 continue
             
             # Remove invalid characters for folder names
@@ -132,11 +132,11 @@ def get_report_name():
             for char in invalid_chars:
                 user_input = user_input.replace(char, '_')
             
-            print(f"✅ Training results will be saved as: runs/detect/{user_input}_dataset_X")
+            print(f"SUCCESS Training results will be saved as: runs/detect/{user_input}_dataset_X")
             return user_input
             
         except KeyboardInterrupt:
-            print("\n❌ Operation cancelled by user.")
+            print("\nERROR Operation cancelled by user.")
             return None
 
 def find_best_model(run_name, dataset_num, fallback_model='yolo11m.pt'):
@@ -147,23 +147,23 @@ def find_best_model(run_name, dataset_num, fallback_model='yolo11m.pt'):
     if best_model_path.exists():
         return str(best_model_path)
     else:
-        print(f"⚠️  Best model not found for dataset {dataset_num}, using {fallback_model}")
+        print(f"WARNING  Best model not found for dataset {dataset_num}, using {fallback_model}")
         return fallback_model
 
 def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", previous_dataset_num=None, 
                         base_model='yolo11m.pt', config_path=None):
     """Train a single dataset and return results"""
     print(f"\n{'='*60}")
-    print(f"🚀 Starting training on Dataset {dataset_num}")
-    print(f"📅 Started at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"LAUNCH Starting training on Dataset {dataset_num}")
+    print(f" Started at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     # Determine which model to use
     if progressive_mode and previous_dataset_num is not None:
         model_path = find_best_model(run_name, previous_dataset_num, base_model)
-        print(f"🔄 Progressive training: Using {model_path}")
+        print(f"PROCESSING Progressive training: Using {model_path}")
     else:
         model_path = base_model
-        print(f"🆕 Normal training: Using {model_path}")
+        print(f" Normal training: Using {model_path}")
     
     print(f"{'='*60}")
     
@@ -181,11 +181,11 @@ def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", p
         
         # Use config file if available, otherwise use basic defaults
         if config_path:
-            print(f"📋 Using configuration from {config_path}")
+            print(f"LIST Using configuration from {config_path}")
             # Let YOLO load the config file directly
             train_params['cfg'] = config_path
         else:
-            print("📋 Using YOLO default parameters")
+            print("LIST Using YOLO default parameters")
             # Only set essential parameters if no config file
             train_params.update({
                 'epochs': 50,
@@ -201,17 +201,17 @@ def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", p
         hours = training_time // 3600
         minutes = (training_time % 3600) // 60
         
-        print(f"\n✅ Dataset {dataset_num} training completed!")
-        print(f"⏱️  Training time: {int(hours)}h {int(minutes)}m")
-        print(f"📁 Results saved in: runs/detect/{run_name}_dataset_{dataset_num}/")
+        print(f"\nSUCCESS Dataset {dataset_num} training completed!")
+        print(f"TIME  Training time: {int(hours)}h {int(minutes)}m")
+        print(f"FOLDER Results saved in: runs/detect/{run_name}_dataset_{dataset_num}/")
         
         # Print final metrics
         try:
             final_results = results.results_dict
             map50 = final_results.get('metrics/mAP50(B)', 0)
             map50_95 = final_results.get('metrics/mAP50-95(B)', 0)
-            print(f"📊 Final mAP50: {map50:.4f}")
-            print(f"📊 Final mAP50-95: {map50_95:.4f}")
+            print(f"CHART Final mAP50: {map50:.4f}")
+            print(f"CHART Final mAP50-95: {map50_95:.4f}")
             
             return {
                 'dataset': dataset_num,
@@ -223,7 +223,7 @@ def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", p
                 'run_name': run_name
             }
         except:
-            print("📊 Check results.csv for detailed metrics")
+            print("CHART Check results.csv for detailed metrics")
             return {
                 'dataset': dataset_num,
                 'success': True,
@@ -235,7 +235,7 @@ def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", p
             }
             
     except Exception as e:
-        print(f"❌ Error training Dataset {dataset_num}: {e}")
+        print(f"ERROR Error training Dataset {dataset_num}: {e}")
         return {
             'dataset': dataset_num,
             'success': False,
@@ -246,9 +246,9 @@ def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", p
         }
 
 def main():
-    print("🎯 AUTOMATED YOLO TRAINING WITH OPTIONS")
+    print("TARGET AUTOMATED YOLO TRAINING WITH OPTIONS")
     print("=" * 60)
-    print("💡 You can stop anytime with Ctrl+C")
+    print("TIP You can stop anytime with Ctrl+C")
     print("=" * 60)
     
     # Check for training configuration file
@@ -272,23 +272,23 @@ def main():
         return
     
     # Display training plan
-    print(f"\n📋 TRAINING PLAN:")
-    print(f"📊 Datasets to train: {', '.join(map(str, dataset_numbers))}")
-    print(f"🔄 Progressive training: {'Yes' if progressive_mode else 'No'}")
-    print(f"🤖 Base model: {Path(base_model).name}")
-    print(f"⚙️  Configuration: {config_path if config_path else 'YOLO defaults'}")
-    print(f"📁 Results will be saved in: runs/detect/{run_name}_dataset_X/")
-    print(f"⏱️  Estimated time per dataset: 2-5 hours (depending on GPU and dataset size)")
+    print(f"\nLIST TRAINING PLAN:")
+    print(f"CHART Datasets to train: {', '.join(map(str, dataset_numbers))}")
+    print(f"PROCESSING Progressive training: {'Yes' if progressive_mode else 'No'}")
+    print(f"MODEL Base model: {Path(base_model).name}")
+    print(f"SETTINGS  Configuration: {config_path if config_path else 'YOLO defaults'}")
+    print(f"FOLDER Results will be saved in: runs/detect/{run_name}_dataset_X/")
+    print(f"TIME  Estimated time per dataset: 2-5 hours (depending on GPU and dataset size)")
     print("=" * 60)
     
     # Confirm before starting
     try:
         confirm = input("\nProceed with training? (y/n): ").strip().lower()
         if confirm not in ['y', 'yes']:
-            print("❌ Training cancelled.")
+            print("ERROR Training cancelled.")
             return
     except KeyboardInterrupt:
-        print("\n❌ Training cancelled.")
+        print("\nERROR Training cancelled.")
         return
     
     results_summary = []
@@ -311,15 +311,15 @@ def main():
             
             # Brief pause between trainings
             if i < len(dataset_numbers) - 1:  # Not the last dataset
-                print(f"\n⏸️  Brief pause before next dataset...")
+                print(f"\nPAUSE  Brief pause before next dataset...")
                 time.sleep(5)
             
         except KeyboardInterrupt:
-            print(f"\n\n🛑 Training interrupted by user!")
-            print(f"📊 Completed datasets so far: {[r['dataset'] for r in results_summary if r['success']]}")
+            print(f"\n\nSTOP Training interrupted by user!")
+            print(f"CHART Completed datasets so far: {[r['dataset'] for r in results_summary if r['success']]}")
             break
         except Exception as e:
-            print(f"\n❌ Unexpected error: {e}")
+            print(f"\nERROR Unexpected error: {e}")
             continue
     
     # Print final summary
@@ -328,23 +328,23 @@ def main():
     total_minutes = (total_time % 3600) // 60
     
     print(f"\n{'='*80}")
-    print(f"🏁 TRAINING SUMMARY")
+    print(f" TRAINING SUMMARY")
     print(f"{'='*80}")
-    print(f"📊 Run Name: {run_name}")
-    print(f"🔄 Training Mode: {'Progressive' if progressive_mode else 'Normal'}")
-    print(f"🤖 Base Model: {Path(base_model).name}")
-    print(f"⚙️  Configuration: {config_path if config_path else 'YOLO defaults'}")
-    print(f"⏱️  Total time: {int(total_hours)}h {int(total_minutes)}m")
-    print(f"📊 Datasets processed: {len(results_summary)}")
+    print(f"CHART Run Name: {run_name}")
+    print(f"PROCESSING Training Mode: {'Progressive' if progressive_mode else 'Normal'}")
+    print(f"MODEL Base Model: {Path(base_model).name}")
+    print(f"SETTINGS  Configuration: {config_path if config_path else 'YOLO defaults'}")
+    print(f"TIME  Total time: {int(total_hours)}h {int(total_minutes)}m")
+    print(f"CHART Datasets processed: {len(results_summary)}")
     
     successful_trainings = [r for r in results_summary if r['success']]
     failed_trainings = [r for r in results_summary if not r['success']]
     
-    print(f"✅ Successful: {len(successful_trainings)}")
-    print(f"❌ Failed: {len(failed_trainings)}")
+    print(f"SUCCESS Successful: {len(successful_trainings)}")
+    print(f"ERROR Failed: {len(failed_trainings)}")
     
     if successful_trainings:
-        print(f"\n📈 PERFORMANCE SUMMARY:")
+        print(f"\nMETRICS PERFORMANCE SUMMARY:")
         print(f"{'Dataset':<10} {'mAP50':<10} {'mAP50-95':<12} {'Time (min)':<12} {'Model Used':<20}")
         print(f"{'-'*70}")
         
@@ -360,15 +360,15 @@ def main():
         valid_results = [r for r in successful_trainings if r['map50'] is not None]
         if valid_results:
             best_dataset = max(valid_results, key=lambda x: x['map50'])
-            print(f"\n🏆 Best performing dataset: Dataset {best_dataset['dataset']} (mAP50: {best_dataset['map50']:.3f})")
+            print(f"\nBEST Best performing dataset: Dataset {best_dataset['dataset']} (mAP50: {best_dataset['map50']:.3f})")
     
     if failed_trainings:
-        print(f"\n❌ FAILED TRAININGS:")
+        print(f"\nERROR FAILED TRAININGS:")
         for result in failed_trainings:
             print(f"   Dataset {result['dataset']}: {result.get('error', 'Unknown error')}")
     
-    print(f"\n📁 All results saved in: runs/detect/{run_name}_dataset_X/")
-    print(f"🔍 Check individual result folders for detailed metrics and visualizations")
+    print(f"\nFOLDER All results saved in: runs/detect/{run_name}_dataset_X/")
+    print(f"SEARCH Check individual result folders for detailed metrics and visualizations")
     print(f"{'='*80}")
 
 if __name__ == "__main__":

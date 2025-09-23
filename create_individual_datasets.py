@@ -220,7 +220,7 @@ names: ['Human', 'Vehicle']
         with open(yaml_path, 'w') as f:
             f.write(yaml_content)
         
-        print(f"📄 Dataset config saved: {yaml_path}")
+        print(f"DOCUMENT Dataset config saved: {yaml_path}")
     
     def process_single_folder(self, folder_identifier):
         """Process a single folder to create one YOLO dataset
@@ -233,15 +233,15 @@ names: ['Human', 'Vehicle']
         folder_path = self.input_dir / folder_name
         
         if not folder_path.exists():
-            print(f"⚠️  Folder '{folder_name}' not found, skipping...")
+            print(f"WARNING  Folder '{folder_name}' not found, skipping...")
             return None
         
-        print(f"\n🔄 Processing Folder: {folder_name}")
+        print(f"\nPROCESSING Processing Folder: {folder_name}")
         
         # Find dataset directory
         dataset_dirs = list(folder_path.glob('dataset*'))
         if not dataset_dirs:
-            print(f"❌ No dataset directory found in folder '{folder_name}'")
+            print(f"ERROR No dataset directory found in folder '{folder_name}'")
             return None
         
         dataset_dir = dataset_dirs[0]
@@ -249,7 +249,7 @@ names: ['Human', 'Vehicle']
         video_dir = dataset_dir / 'video'
         
         if not ann_dir.exists() or not video_dir.exists():
-            print(f"❌ Missing ann or video directory in folder '{folder_name}'")
+            print(f"ERROR Missing ann or video directory in folder '{folder_name}'")
             return None
         
         # Setup output dataset - use a clean name for the dataset
@@ -273,7 +273,7 @@ names: ['Human', 'Vehicle']
         
         # Get all annotation files
         ann_files = list(ann_dir.glob('*.json'))
-        print(f"📁 Found {len(ann_files)} annotation files")
+        print(f"FOLDER Found {len(ann_files)} annotation files")
         
         # Process each video
         all_video_frames = []  # Collect all frames from all videos
@@ -283,14 +283,14 @@ names: ['Human', 'Vehicle']
             video_file = str(video_dir / f"{video_name}")
             
             if not Path(video_file).exists():
-                print(f"⚠️  Video file not found: {video_name}")
+                print(f"WARNING  Video file not found: {video_name}")
                 continue
             
             # Get all frames (annotated + unannotated) from this video
             frames = self.get_all_frames_from_annotation(str(ann_file))
             
             if not frames:
-                print(f"⚠️  No frames found in {video_name}")
+                print(f"WARNING  No frames found in {video_name}")
                 continue
             
             # Add video info to each frame
@@ -302,14 +302,14 @@ names: ['Human', 'Vehicle']
             all_video_frames.extend(frames)
             stats['processed_videos'] += 1
             
-            print(f"  📹 {video_name}: {len(frames)} frames ({sum(1 for f in frames if f['annotated'])} annotated)")
+            print(f"  VIDEO {video_name}: {len(frames)} frames ({sum(1 for f in frames if f['annotated'])} annotated)")
         
         if not all_video_frames:
-            print(f"❌ No frames to process in folder {folder_num}")
+            print(f"ERROR No frames to process in folder {folder_num}")
             return None
         
         # RANDOM SPLIT: Shuffle all frames then split
-        print(f"🔀 Randomly splitting {len(all_video_frames)} frames...")
+        print(f"SHUFFLE Randomly splitting {len(all_video_frames)} frames...")
         random.shuffle(all_video_frames)
         
         total_frames = len(all_video_frames)
@@ -320,11 +320,11 @@ names: ['Human', 'Vehicle']
         val_frames = all_video_frames[train_count:train_count + val_count]
         test_frames = all_video_frames[train_count + val_count:]
         
-        print(f"📊 Split: {len(train_frames)} train, {len(val_frames)} val, {len(test_frames)} test")
+        print(f"CHART Split: {len(train_frames)} train, {len(val_frames)} val, {len(test_frames)} test")
         
         # Process frames for each split
         for split_name, frames in [('train', train_frames), ('val', val_frames), ('test', test_frames)]:
-            print(f"  🔄 Processing {split_name} split ({len(frames)} frames)...")
+            print(f"  PROCESSING Processing {split_name} split ({len(frames)} frames)...")
             
             for i, frame in enumerate(frames):
                 if i % 100 == 0:
@@ -351,16 +351,16 @@ names: ['Human', 'Vehicle']
         # Store stats
         self.all_stats[folder_identifier] = stats
         
-        print(f"✅ Dataset {dataset_name} created successfully!")
-        print(f"   📊 {stats['total_frames']} total frames")
-        print(f"   📊 {stats['annotated_frames']} annotated, {stats['unannotated_frames']} unannotated")
-        print(f"   📁 Saved to: {dataset_path}")
+        print(f"SUCCESS Dataset {dataset_name} created successfully!")
+        print(f"   CHART {stats['total_frames']} total frames")
+        print(f"   CHART {stats['annotated_frames']} annotated, {stats['unannotated_frames']} unannotated")
+        print(f"   FOLDER Saved to: {dataset_path}")
         
         return dataset_path
     
     def create_selected_datasets(self, folder_identifiers):
         """Create individual datasets for specified folder identifiers (numbers or names)"""
-        print(f"🚀 Creating YOLO Datasets for folders: {', '.join(map(str, folder_identifiers))}")
+        print(f"LAUNCH Creating YOLO Datasets for folders: {', '.join(map(str, folder_identifiers))}")
         print("=" * 50)
         
         successful_datasets = []
@@ -371,24 +371,24 @@ names: ['Human', 'Vehicle']
                 if dataset_path:
                     successful_datasets.append((folder_identifier, dataset_path))
             except Exception as e:
-                print(f"❌ Error processing folder {folder_identifier}: {e}")
+                print(f"ERROR Error processing folder {folder_identifier}: {e}")
                 continue
         
         # Print summary
         print("\n" + "=" * 50)
-        print("📊 SUMMARY")
+        print("CHART SUMMARY")
         print("=" * 50)
         
         for folder_identifier, dataset_path in successful_datasets:
             stats = self.all_stats[folder_identifier]
             print(f"Dataset {folder_identifier}:")
-            print(f"  📁 Path: {dataset_path}")
-            print(f"  📊 Frames: {stats['total_frames']} ({stats['annotated_frames']} annotated)")
-            print(f"  🎯 Split: {stats['train_frames']} train, {stats['val_frames']} val, {stats['test_frames']} test")
-            print(f"  🏷️  Classes: {stats['class_counts']['Human']} Human, {stats['class_counts']['Vehicle']} Vehicle")
+            print(f"  FOLDER Path: {dataset_path}")
+            print(f"  CHART Frames: {stats['total_frames']} ({stats['annotated_frames']} annotated)")
+            print(f"  TARGET Split: {stats['train_frames']} train, {stats['val_frames']} val, {stats['test_frames']} test")
+            print(f"    Classes: {stats['class_counts']['Human']} Human, {stats['class_counts']['Vehicle']} Vehicle")
         
-        print(f"\n✅ Successfully created {len(successful_datasets)} out of {len(folder_identifiers)} requested datasets!")
-        print(f"📁 All datasets saved in: {self.output_base_dir}")
+        print(f"\nSUCCESS Successfully created {len(successful_datasets)} out of {len(folder_identifiers)} requested datasets!")
+        print(f"FOLDER All datasets saved in: {self.output_base_dir}")
         
         return successful_datasets
 
@@ -398,7 +398,7 @@ def get_folder_identifiers():
         try:
             user_input = input("\nEnter folder numbers/names separated by commas (e.g., 10,11,bird_dataset,annotated_lizards): ").strip()
             if not user_input:
-                print("❌ Please enter at least one folder identifier.")
+                print("ERROR Please enter at least one folder identifier.")
                 continue
             
             # Parse comma-separated identifiers (numbers or strings)
@@ -413,7 +413,7 @@ def get_folder_identifiers():
                         folder_identifiers.append(identifier)
             
             if not folder_identifiers:
-                print("❌ Please enter valid folder identifiers.")
+                print("ERROR Please enter valid folder identifiers.")
                 continue
                 
             # Remove duplicates while preserving order and mixed types
@@ -424,11 +424,11 @@ def get_folder_identifiers():
                     seen.add(item)
                     unique_identifiers.append(item)
             
-            print(f"✅ Selected folders: {', '.join(map(str, unique_identifiers))}")
+            print(f"SUCCESS Selected folders: {', '.join(map(str, unique_identifiers))}")
             return unique_identifiers
             
         except KeyboardInterrupt:
-            print("\n❌ Operation cancelled by user.")
+            print("\nERROR Operation cancelled by user.")
             return None
 
 # Keep the old function for backward compatibility
@@ -454,18 +454,18 @@ def main():
     # Set random seed for reproducible splits
     random.seed(args.seed)
     
-    print(f"🎲 Using random seed: {args.seed}")
-    print(f"📂 Input directory: {args.input}")
-    print(f"📁 Output directory: {args.output}")
+    print(f" Using random seed: {args.seed}")
+    print(f"FOLDER Input directory: {args.input}")
+    print(f"FOLDER Output directory: {args.output}")
     
     # Get folder numbers
     if args.folders:
         try:
             folder_numbers = [int(x.strip()) for x in args.folders.split(',') if x.strip()]
             folder_numbers = sorted(list(set(folder_numbers)))
-            print(f"✅ Using folders from command line: {', '.join(map(str, folder_numbers))}")
+            print(f"SUCCESS Using folders from command line: {', '.join(map(str, folder_numbers))}")
         except ValueError:
-            print("❌ Invalid folder numbers in command line argument. Please use format: --folders '10,11,12'")
+            print("ERROR Invalid folder numbers in command line argument. Please use format: --folders '10,11,12'")
             return
     else:
         folder_numbers = get_folder_numbers()

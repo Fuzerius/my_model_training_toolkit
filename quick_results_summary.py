@@ -72,15 +72,15 @@ def classify_difficulty(metrics):
     map50 = metrics['best_map50']
     
     if map50 >= 0.70:
-        return "🟢 Easy", 3
+        return "EASY Easy", 3
     elif map50 >= 0.50:
-        return "🟡 Medium", 2
+        return "MEDIUM Medium", 2
     else:
-        return "🔴 Hard", 1
+        return "HARD Hard", 1
 
 def get_folder_selection(available_folders):
     """Let user select which folders to compare"""
-    print("📂 Available result folders:")
+    print("FOLDER Available result folders:")
     for i, folder in enumerate(available_folders, 1):
         print(f"  {i}. {folder}")
     
@@ -105,7 +105,7 @@ def get_folder_selection(available_folders):
                     if 0 <= idx < len(available_folders):
                         selected_indices.append(idx)
                     else:
-                        print(f"❌ Invalid number: {num_str}. Please use numbers 1-{len(available_folders)}")
+                        print(f"ERROR Invalid number: {num_str}. Please use numbers 1-{len(available_folders)}")
                         break
             else:
                 # If we didn't break, all numbers were valid
@@ -113,16 +113,16 @@ def get_folder_selection(available_folders):
                 if selected_folders:
                     return selected_folders
                 
-            print("❌ Please enter valid folder numbers.")
+            print("ERROR Please enter valid folder numbers.")
             
         except ValueError:
-            print("❌ Please enter valid numbers separated by commas.")
+            print("ERROR Please enter valid numbers separated by commas.")
         except KeyboardInterrupt:
-            print("\n❌ Operation cancelled.")
+            print("\nERROR Operation cancelled.")
             return None
 
 def main():
-    print("📊 QUICK RESULTS SUMMARY")
+    print("CHART QUICK RESULTS SUMMARY")
     print("=" * 80)
     
     # Load settings to get default results folder
@@ -130,22 +130,22 @@ def main():
     
     # Check if default folder exists, if not ask user
     if not Path(default_results_folder).exists():
-        print(f"❌ Default results folder '{default_results_folder}' not found!")
+        print(f"ERROR Default results folder '{default_results_folder}' not found!")
         user_folder = input("Enter path to YOLO results folder (e.g., runs/detect): ").strip()
         if not user_folder:
-            print("❌ No folder provided. Exiting.")
+            print("ERROR No folder provided. Exiting.")
             return
         results_folder = user_folder
     else:
         results_folder = default_results_folder
     
-    print(f"📁 Using results folder: {results_folder}")
+    print(f"FOLDER Using results folder: {results_folder}")
     
     # Get available result folders
     available_folders = get_available_result_folders(results_folder)
     
     if not available_folders:
-        print("❌ No training results found!")
+        print("ERROR No training results found!")
         print(f"Make sure you have trained models with results.csv in: {results_folder}")
         return
     
@@ -154,8 +154,8 @@ def main():
     if not selected_folders:
         return
     
-    print(f"\n✅ Selected {len(selected_folders)} folder(s) for comparison")
-    print(f"📋 Comparing: {', '.join(selected_folders)}")
+    print(f"\nSUCCESS Selected {len(selected_folders)} folder(s) for comparison")
+    print(f"LIST Comparing: {', '.join(selected_folders)}")
     print()
     
     # Get results for selected folders
@@ -166,7 +166,7 @@ def main():
             all_results.append(metrics)
     
     if not all_results:
-        print("❌ No valid results found in selected folders!")
+        print("ERROR No valid results found in selected folders!")
         return
     
     # Sort by performance (best mAP50 first)
@@ -197,10 +197,10 @@ def main():
     
     # Print classification summary
     print("\n" + "=" * 80)
-    print("🎯 MODEL DIFFICULTY CLASSIFICATION")
+    print("TARGET MODEL DIFFICULTY CLASSIFICATION")
     print("=" * 80)
     
-    print(f"🟢 EASY MODELS (mAP50 ≥ 0.70): {len(easy_folders)} models")
+    print(f"EASY EASY MODELS (mAP50 ≥ 0.70): {len(easy_folders)} models")
     if easy_folders:
         print(f"   → Use for base training")
         print(f"   → Best starter: {easy_folders[0]}")
@@ -209,7 +209,7 @@ def main():
         if len(easy_folders) > 3:
             print(f"     ... and {len(easy_folders) - 3} more")
     
-    print(f"\n🟡 MEDIUM MODELS (mAP50 = 0.50-0.69): {len(medium_folders)} models")
+    print(f"\nMEDIUM MEDIUM MODELS (mAP50 = 0.50-0.69): {len(medium_folders)} models")
     if medium_folders:
         print(f"   → Use for progressive fine-tuning")
         for folder in medium_folders[:3]:  # Show top 3
@@ -217,7 +217,7 @@ def main():
         if len(medium_folders) > 3:
             print(f"     ... and {len(medium_folders) - 3} more")
     
-    print(f"\n🔴 HARD MODELS (mAP50 < 0.50): {len(hard_folders)} models")
+    print(f"\nHARD HARD MODELS (mAP50 < 0.50): {len(hard_folders)} models")
     if hard_folders:
         print(f"   → Use for final robustness training")
         print(f"   → Train with conservative settings")
@@ -228,27 +228,27 @@ def main():
     
     # Training recommendations
     print("\n" + "=" * 80)
-    print("🚀 RECOMMENDED PROGRESSIVE TRAINING ORDER")
+    print("LAUNCH RECOMMENDED PROGRESSIVE TRAINING ORDER")
     print("=" * 80)
     
     if easy_folders:
-        print(f"1️⃣  Base training: {easy_folders[0]} (best easy model)")
+        print(f"1.  Base training: {easy_folders[0]} (best easy model)")
         
     if medium_folders:
-        print(f"2️⃣  Progressive fine-tuning:")
+        print(f"2.  Progressive fine-tuning:")
         for i, folder in enumerate(medium_folders[:3], 1):  # Show top 3
             print(f"    {i}. {folder}")
         if len(medium_folders) > 3:
             print(f"    ... and {len(medium_folders) - 3} more medium models")
     
     if hard_folders:
-        print(f"3️⃣  Final robustness training:")
+        print(f"3.  Final robustness training:")
         for i, folder in enumerate(hard_folders[:3], 1):  # Show top 3
             print(f"    {i}. {folder}")
         if len(hard_folders) > 3:
             print(f"    ... and {len(hard_folders) - 3} more hard models")
     
-    print(f"\n💡 Start with: {all_results[0]['folder']} (highest mAP50: {all_results[0]['best_map50']:.3f})")
+    print(f"\nTIP Start with: {all_results[0]['folder']} (highest mAP50: {all_results[0]['best_map50']:.3f})")
 
 if __name__ == "__main__":
     main()
