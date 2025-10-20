@@ -305,7 +305,7 @@ names: ['Human', 'Vehicle']
             print(f"  VIDEO {video_name}: {len(frames)} frames ({sum(1 for f in frames if f['annotated'])} annotated)")
         
         if not all_video_frames:
-            print(f"ERROR No frames to process in folder {folder_num}")
+            print(f"ERROR No frames to process in folder {folder_identifier}")
             return None
         
         # RANDOM SPLIT: Shuffle all frames then split

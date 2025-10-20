@@ -15,8 +15,7 @@ import json
 from pathlib import Path
 import math
 
-# Maximum file size in bytes (100MB)
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB in bytes
+# Note: Chunk size is now user-configurable via get_chunk_size() function
 
 def check_ffmpeg():
     """Check if FFmpeg is available."""
@@ -46,13 +45,14 @@ def get_video_info(video_path):
     except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError):
         return None
 
-def calculate_chunk_duration(video_info, file_size):
+def calculate_chunk_duration(video_info, file_size, max_chunk_size):
     """
-    Calculate the optimal chunk duration to stay under 100MB.
+    Calculate the optimal chunk duration to stay under the specified size limit.
     
     Args:
         video_info: Video information from ffprobe
         file_size: Current file size in bytes
+        max_chunk_size: Maximum chunk size in bytes
         
     Returns:
         Chunk duration in seconds
@@ -62,7 +62,7 @@ def calculate_chunk_duration(video_info, file_size):
         duration = float(video_info['format']['duration'])
         
         # Calculate how many chunks we need
-        num_chunks = math.ceil(file_size / MAX_FILE_SIZE)
+        num_chunks = math.ceil(file_size / max_chunk_size)
         
         # Calculate chunk duration
         chunk_duration = duration / num_chunks
@@ -76,10 +76,45 @@ def calculate_chunk_duration(video_info, file_size):
         # Fallback: assume 10 minutes per chunk if we can't calculate
         return 600  # 10 minutes
 
+def get_chunk_size():
+    """Get the desired chunk size from user."""
+    print("=== Video Splitter with Custom Chunk Size ===\n")
+    print("Choose the maximum size for each video chunk:")
+    print("1. 50 MB")
+    print("2. 100 MB (default)")
+    print("3. 200 MB")
+    print("4. 500 MB")
+    print("5. Custom size")
+    
+    while True:
+        try:
+            choice = int(input("\nChoose chunk size option (1-5): ").strip())
+            if choice == 1:
+                return 50 * 1024 * 1024  # 50MB
+            elif choice == 2:
+                return 100 * 1024 * 1024  # 100MB
+            elif choice == 3:
+                return 200 * 1024 * 1024  # 200MB
+            elif choice == 4:
+                return 500 * 1024 * 1024  # 500MB
+            elif choice == 5:
+                while True:
+                    try:
+                        custom_size = float(input("Enter custom size in MB: ").strip())
+                        if custom_size > 0:
+                            return int(custom_size * 1024 * 1024)
+                        else:
+                            print("Error: Size must be greater than 0.")
+                    except ValueError:
+                        print("Error: Please enter a valid number.")
+            else:
+                print("Error: Please choose 1-5.")
+        except ValueError:
+            print("Error: Please enter a valid number.")
+
 def get_processing_mode():
     """Ask user to choose between single video or folder processing."""
-    print("=== Video Splitter (100MB Chunks with Auto Re-split) ===\n")
-    print("Processing options:")
+    print("\nProcessing options:")
     print("1. Split a single video file")
     print("2. Split all large videos in a folder")
     
@@ -107,8 +142,9 @@ def get_single_video_path():
         else:
             print(f"Error: File '{video_path}' not found. Please try again.")
 
-def get_folder_path():
+def get_folder_path(max_chunk_size):
     """Get folder path from user."""
+    chunk_size_mb = max_chunk_size / (1024 * 1024)
     while True:
         folder_path = input("\nEnter the path to the folder containing videos: ").strip().strip('"')
         if os.path.exists(folder_path) and os.path.isdir(folder_path):
@@ -122,14 +158,14 @@ def get_folder_path():
             # Remove duplicates that may occur on case-insensitive file systems
             video_files = list(set(video_files))
             
-            # Filter for files larger than 100MB
+            # Filter for files larger than the specified chunk size
             large_videos = []
             for video in video_files:
-                if os.path.getsize(video) > MAX_FILE_SIZE:
+                if os.path.getsize(video) > max_chunk_size:
                     large_videos.append(video)
             
             if large_videos:
-                print(f"Found {len(large_videos)} video file(s) larger than 100MB:")
+                print(f"Found {len(large_videos)} video file(s) larger than {chunk_size_mb:.0f}MB:")
                 for i, video in enumerate(large_videos[:5], 1):  # Show first 5 files
                     size_mb = os.path.getsize(video) / (1024 * 1024)
                     print(f"  {i}. {os.path.basename(video)} ({size_mb:.1f} MB)")
@@ -137,7 +173,7 @@ def get_folder_path():
                     print(f"  ... and {len(large_videos) - 5} more files")
                 return folder_path, large_videos
             elif video_files:
-                print("No video files larger than 100MB found in the specified folder.")
+                print(f"No video files larger than {chunk_size_mb:.0f}MB found in the specified folder.")
                 print("All videos are already under the size limit!")
                 return None, []
             else:
@@ -195,14 +231,15 @@ def create_video_output_directory(main_output_dir, video_path):
     
     return video_output_dir
 
-def split_oversized_chunk(chunk_path, video_output_dir, chunk_number):
+def split_oversized_chunk(chunk_path, video_output_dir, chunk_number, max_chunk_size):
     """
-    Recursively split a chunk that's still over 100MB.
+    Recursively split a chunk that's still over the specified size limit.
     
     Args:
         chunk_path: Path to the oversized chunk
         video_output_dir: Directory where chunks are stored
         chunk_number: Original chunk number for naming
+        max_chunk_size: Maximum chunk size in bytes
         
     Returns:
         List of successfully created sub-chunks
@@ -218,8 +255,8 @@ def split_oversized_chunk(chunk_path, video_output_dir, chunk_number):
     chunk_size = os.path.getsize(chunk_path)
     chunk_duration = float(chunk_info['format']['duration'])
     
-    # Calculate how many sub-chunks we need (aim for ~90MB to be safe)
-    target_size = 90 * 1024 * 1024  # 90MB target for re-splits
+    # Calculate how many sub-chunks we need (aim for 90% of max size to be safe)
+    target_size = int(max_chunk_size * 0.9)  # 90% of max size for re-splits
     num_subchunks = math.ceil(chunk_size / target_size)
     subchunk_duration = (chunk_duration / num_subchunks) * 0.95  # 5% safety margin
     
@@ -263,9 +300,10 @@ def split_oversized_chunk(chunk_path, video_output_dir, chunk_number):
             if os.path.exists(subchunk_path):
                 subchunk_size = os.path.getsize(subchunk_path)
                 subchunk_size_mb = subchunk_size / (1024 * 1024)
+                max_size_mb = max_chunk_size / (1024 * 1024)
                 
-                if subchunk_size_mb > 100:
-                    print(f"      WARNING  Sub-chunk still {subchunk_size_mb:.1f} MB - may need manual review")
+                if subchunk_size > max_chunk_size:
+                    print(f"      WARNING  Sub-chunk still {subchunk_size_mb:.1f} MB (over {max_size_mb:.0f}MB limit) - may need manual review")
                 else:
                     print(f"      SUCCESS Sub-chunk: {subchunk_size_mb:.1f} MB")
                 
@@ -287,13 +325,14 @@ def split_oversized_chunk(chunk_path, video_output_dir, chunk_number):
     
     return successful_subchunks
 
-def split_video(video_path, main_output_dir):
+def split_video(video_path, main_output_dir, max_chunk_size):
     """
-    Split a video into chunks under 100MB each.
+    Split a video into chunks under the specified size limit.
     
     Args:
         video_path: Path to the input video
         main_output_dir: Main directory to save the split videos
+        max_chunk_size: Maximum chunk size in bytes
         
     Returns:
         True if successful, False otherwise
@@ -308,11 +347,12 @@ def split_video(video_path, main_output_dir):
     # Get file size
     file_size = os.path.getsize(video_path)
     size_mb = file_size / (1024 * 1024)
+    max_size_mb = max_chunk_size / (1024 * 1024)
     
     print(f"  File size: {size_mb:.1f} MB")
     
-    if file_size <= MAX_FILE_SIZE:
-        print(f"  SUCCESS File is already under 100MB, skipping...")
+    if file_size <= max_chunk_size:
+        print(f"  SUCCESS File is already under {max_size_mb:.0f}MB, skipping...")
         return True
     
     # Get video information
@@ -322,7 +362,7 @@ def split_video(video_path, main_output_dir):
         return False
     
     # Calculate chunk duration
-    chunk_duration = calculate_chunk_duration(video_info, file_size)
+    chunk_duration = calculate_chunk_duration(video_info, file_size, max_chunk_size)
     total_duration = float(video_info['format']['duration'])
     
     print(f"  Duration: {total_duration:.1f} seconds")
@@ -371,11 +411,12 @@ def split_video(video_path, main_output_dir):
             if os.path.exists(output_path):
                 chunk_size = os.path.getsize(output_path)
                 chunk_size_mb = chunk_size / (1024 * 1024)
+                max_size_mb = max_chunk_size / (1024 * 1024)
                 
-                if chunk_size_mb > 100:
-                    print(f"    WARNING  Chunk is {chunk_size_mb:.1f} MB (over 100MB limit!)")
+                if chunk_size > max_chunk_size:
+                    print(f"    WARNING  Chunk is {chunk_size_mb:.1f} MB (over {max_size_mb:.0f}MB limit!)")
                     # Automatically re-split this oversized chunk
-                    subchunks = split_oversized_chunk(output_path, video_output_dir, i+1)
+                    subchunks = split_oversized_chunk(output_path, video_output_dir, i+1, max_chunk_size)
                     if subchunks:
                         print(f"    SUCCESS Successfully re-split into {len(subchunks)} sub-chunks")
                         success_count += len(subchunks)
@@ -398,13 +439,14 @@ def split_video(video_path, main_output_dir):
         print(f"  ERROR Failed to create any chunks")
         return False
 
-def process_videos(video_files, base_path):
+def process_videos(video_files, base_path, max_chunk_size):
     """
     Process multiple videos for splitting.
     
     Args:
         video_files: List of video file paths
         base_path: Base directory path
+        max_chunk_size: Maximum chunk size in bytes
         
     Returns:
         Number of successfully processed videos
@@ -425,7 +467,7 @@ def process_videos(video_files, base_path):
         print(f"\nVIDEO Processing video {i}/{total_videos}: {video_name}")
         
         try:
-            success = split_video(video_path, output_dir)
+            success = split_video(video_path, output_dir, max_chunk_size)
             if success:
                 successful_videos += 1
                 print(f"SUCCESS Successfully processed: {video_name}")
@@ -461,6 +503,11 @@ def main():
         
         print("SUCCESS FFmpeg found")
         
+        # Get chunk size from user
+        max_chunk_size = get_chunk_size()
+        chunk_size_mb = max_chunk_size / (1024 * 1024)
+        print(f"\nSUCCESS Using chunk size: {chunk_size_mb:.0f} MB")
+        
         # Get processing mode
         mode = get_processing_mode()
         
@@ -470,7 +517,7 @@ def main():
             
             # Check if video needs splitting
             file_size = os.path.getsize(video_path)
-            if file_size <= MAX_FILE_SIZE:
+            if file_size <= max_chunk_size:
                 size_mb = file_size / (1024 * 1024)
                 print(f"\nSUCCESS Video is only {size_mb:.1f} MB - no splitting needed!")
                 return
@@ -479,7 +526,7 @@ def main():
             video_files = [video_path]
         else:
             # Folder processing
-            result = get_folder_path()
+            result = get_folder_path(max_chunk_size)
             if result is None:
                 return
             
@@ -488,7 +535,7 @@ def main():
                 return
         
         # Process the videos
-        successful_videos = process_videos(video_files, base_path)
+        successful_videos = process_videos(video_files, base_path, max_chunk_size)
         
         if successful_videos > 0:
             print(f"\nCOMPLETE Successfully processed {successful_videos} video(s)!")
