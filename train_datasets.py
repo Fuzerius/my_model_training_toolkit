@@ -9,9 +9,73 @@ from ultralytics import YOLO
 import time
 import datetime
 import os
+import json
+import yaml
 from pathlib import Path
 
-def check_config_file(config_path='train_config.yaml'):
+class SettingsManager:
+    """Manage settings for training script"""
+    def __init__(self, settings_file="settings/train_dataset.json"):
+        self.settings_file = Path(settings_file)
+        self.default_settings = {
+            "default_dataset_folder": "dataset_yolo_format"
+        }
+        self.settings = self.load_settings()
+    
+    def load_settings(self):
+        """Load settings from file, create with defaults if doesn't exist"""
+        if self.settings_file.exists():
+            try:
+                with open(self.settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                # Ensure all required keys exist
+                for key, value in self.default_settings.items():
+                    if key not in settings:
+                        settings[key] = value
+                return settings
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"WARNING  Error loading settings: {e}")
+                print("Using default settings.")
+                return self.default_settings.copy()
+        else:
+            # Create settings file with defaults
+            self.save_settings(self.default_settings)
+            return self.default_settings.copy()
+    
+    def save_settings(self, settings=None):
+        """Save settings to file"""
+        if settings is None:
+            settings = self.settings
+        
+        try:
+            # Ensure settings directory exists
+            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(self.settings_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            return True
+        except IOError as e:
+            print(f"ERROR Error saving settings: {e}")
+            return False
+    
+    def get_setting(self, key):
+        """Get a specific setting value"""
+        return self.settings.get(key, self.default_settings.get(key))
+    
+    def set_setting(self, key, value):
+        """Set a specific setting value and save"""
+        self.settings[key] = value
+        return self.save_settings()
+    
+    def get_default_dataset_folder(self):
+        """Get default dataset folder"""
+        return self.get_setting("default_dataset_folder")
+    
+    def set_default_dataset_folder(self, folder):
+        """Set default dataset folder"""
+        return self.set_setting("default_dataset_folder", folder)
+
+def check_config_file(config_path='settings/train_config.yaml'):
     """Check if training configuration file exists"""
     if Path(config_path).exists():
         print(f"SUCCESS Training configuration found: {config_path}")
@@ -20,19 +84,91 @@ def check_config_file(config_path='train_config.yaml'):
         print(f"ERROR Configuration file {config_path} not found. YOLO will use default parameters.")
         return None
 
+def manage_settings(settings_manager):
+    """Manage training settings"""
+    print("\n" + "="*60)
+    print("SETTINGS MANAGEMENT")
+    print("="*60)
+    
+    while True:
+        print(f"\nCurrent settings:")
+        print(f"  Default dataset folder: {settings_manager.get_default_dataset_folder()}")
+        print(f"\nOptions:")
+        print("1. Change default dataset folder")
+        print("2. View current settings")
+        print("3. Reset to defaults")
+        print("4. Back to main menu")
+        
+        try:
+            choice = input("\nSelect option (1-4): ").strip()
+            
+            if choice == '1':
+                current_folder = settings_manager.get_default_dataset_folder()
+                print(f"\nCurrent default dataset folder: {current_folder}")
+                new_folder = input("Enter new default dataset folder path (or press Enter to cancel): ").strip()
+                
+                if new_folder:
+                    # Validate folder exists
+                    test_path = Path(new_folder)
+                    if test_path.exists() and test_path.is_dir():
+                        if settings_manager.set_default_dataset_folder(new_folder):
+                            print(f"SUCCESS Default dataset folder updated to: {new_folder}")
+                        else:
+                            print("ERROR Failed to save settings")
+                    else:
+                        print(f"ERROR Folder does not exist: {new_folder}")
+                        create = input("Create this folder? (y/n): ").strip().lower()
+                        if create == 'y':
+                            test_path.mkdir(parents=True, exist_ok=True)
+                            if settings_manager.set_default_dataset_folder(new_folder):
+                                print(f"SUCCESS Created folder and updated setting to: {new_folder}")
+            
+            elif choice == '2':
+                print("\nCurrent Settings:")
+                print(f"  Default dataset folder: {settings_manager.get_default_dataset_folder()}")
+                input("\nPress Enter to continue...")
+            
+            elif choice == '3':
+                confirm = input("Reset all settings to defaults? (y/n): ").strip().lower()
+                if confirm == 'y':
+                    settings_manager.settings = settings_manager.default_settings.copy()
+                    if settings_manager.save_settings():
+                        print("SUCCESS Settings reset to defaults")
+            
+            elif choice == '4':
+                break
+            
+            else:
+                print("ERROR Invalid choice. Please enter 1-4")
+        
+        except KeyboardInterrupt:
+            print("\nERROR Operation cancelled.")
+            break
+        except Exception as e:
+            print(f"ERROR Error: {e}")
+
 def get_available_models(models_dir='models'):
-    """Get list of available model files"""
+    """Get list of available model files from the models folder"""
+    # Convert to absolute path if relative
     models_path = Path(models_dir)
+    if not models_path.is_absolute():
+        models_path = Path.cwd() / models_dir
+    
     if not models_path.exists():
-        print(f"ERROR Models directory '{models_dir}' not found.")
+        print(f"ERROR Models directory not found: {models_path}")
+        return []
+    
+    if not models_path.is_dir():
+        print(f"ERROR Path is not a directory: {models_path}")
         return []
     
     model_files = list(models_path.glob('*.pt'))
     if not model_files:
-        print(f"ERROR No .pt model files found in '{models_dir}' directory.")
+        print(f"ERROR No .pt model files found in: {models_path}")
         return []
     
-    return [str(model.relative_to('.')) for model in model_files]
+    # Return absolute paths
+    return [str(model) for model in sorted(model_files)]
 
 def get_model_selection():
     """Ask user to select a model from available models"""
@@ -44,10 +180,13 @@ def get_model_selection():
     
     while True:
         try:
-            print(f"\nPACKAGE Available models:")
+            models_path = Path(available_models[0]).parent
+            print(f"\nPACKAGE Available models in: {models_path}")
+            print("-" * 60)
             for i, model in enumerate(available_models, 1):
                 model_name = Path(model).name
-                print(f"  {i}. {model_name}")
+                model_size = Path(model).stat().st_size / (1024 * 1024)  # Size in MB
+                print(f"  {i}. {model_name} ({model_size:.1f} MB)")
             
             choice = input(f"\nSelect a model (1-{len(available_models)}): ").strip()
             
@@ -69,34 +208,179 @@ def get_model_selection():
             print("\nERROR Operation cancelled by user.")
             return None
 
-def get_dataset_numbers():
-    """Get dataset numbers from user input"""
+def get_dataset_folder():
+    """Prompt user for the folder containing datasets"""
     while True:
         try:
-            user_input = input("\nEnter dataset numbers separated by commas (e.g., 1,2,3): ").strip()
-            if not user_input:
-                print("ERROR Please enter at least one dataset number.")
+            print("\n" + "="*60)
+            print("DATASET FOLDER SELECTION")
+            print("="*60)
+            folder_input = input("Enter path to folder containing datasets (or press Enter for 'dataset_yolo_format'): ").strip()
+            
+            if not folder_input:
+                folder_input = "dataset_yolo_format"
+            
+            dataset_folder = Path(folder_input)
+            
+            # Check if folder exists
+            if not dataset_folder.exists():
+                print(f"ERROR Folder does not exist: {dataset_folder}")
+                create = input("Create this folder? (y/n): ").strip().lower()
+                if create == 'y':
+                    dataset_folder.mkdir(parents=True, exist_ok=True)
+                    print(f"SUCCESS Created folder: {dataset_folder}")
+                else:
+                    continue
+            
+            if not dataset_folder.is_dir():
+                print(f"ERROR Path is not a directory: {dataset_folder}")
                 continue
             
-            # Parse comma-separated numbers
-            dataset_numbers = []
-            for num_str in user_input.split(','):
-                num_str = num_str.strip()
-                if num_str:
-                    dataset_numbers.append(int(num_str))
+            print(f"SUCCESS Using dataset folder: {dataset_folder.absolute()}")
+            return str(dataset_folder)
             
-            if not dataset_numbers:
-                print("ERROR Please enter valid dataset numbers.")
+        except KeyboardInterrupt:
+            print("\nERROR Operation cancelled by user.")
+            return None
+        except Exception as e:
+            print(f"ERROR Invalid path: {e}")
+            continue
+
+def list_available_datasets(dataset_folder='dataset_yolo_format'):
+    """List all available datasets in the folder"""
+    dataset_folder_path = Path(dataset_folder)
+    if not dataset_folder_path.exists():
+        return []
+    
+    available_datasets = []
+    
+    # Check all subdirectories
+    for item in dataset_folder_path.iterdir():
+        if item.is_dir():
+            # Check if it has a dataset.yaml file
+            yaml_file = item / "dataset.yaml"
+            if yaml_file.exists():
+                # Try to determine the identifier
+                folder_name = item.name
+                if folder_name.startswith('dataset_'):
+                    # Remove 'dataset_' prefix to get identifier
+                    identifier = folder_name.replace('dataset_', '', 1)
+                    # Try to convert to int if it's a number
+                    try:
+                        identifier = int(identifier)
+                    except ValueError:
+                        pass  # Keep as string
+                else:
+                    identifier = folder_name
+                
+                available_datasets.append(identifier)
+    
+    return sorted(available_datasets, key=lambda x: (isinstance(x, int), x))
+
+def get_dataset_identifiers(dataset_folder='dataset_yolo_format'):
+    """Get dataset identifiers (numbers or names) from user input"""
+    # First, list all available datasets
+    available_datasets = list_available_datasets(dataset_folder)
+    
+    if not available_datasets:
+        print(f"ERROR No datasets found in {dataset_folder}")
+        return None
+    
+    print("\n" + "="*60)
+    print("AVAILABLE DATASETS")
+    print("="*60)
+    for i, dataset in enumerate(available_datasets, 1):
+        # Display both the identifier and the folder name
+        if isinstance(dataset, int):
+            folder_name = f"dataset_{dataset}"
+        else:
+            folder_name = str(dataset)
+        
+        print(f"  {i}. {dataset} (folder: {folder_name})")
+    print("="*60)
+    print(f"\nTIP You can type 'all' to train all {len(available_datasets)} datasets")
+    print("TIP Or enter specific dataset names/numbers separated by commas")
+    
+    while True:
+        try:
+            user_input = input("\nEnter dataset names/numbers (or 'all' for all datasets): ").strip()
+            if not user_input:
+                print("ERROR Please enter at least one dataset identifier or 'all'.")
+                continue
+            
+            # Check if user wants all datasets
+            if user_input.lower() == 'all':
+                print(f"SUCCESS Selected all {len(available_datasets)} datasets")
+                return available_datasets
+            
+            # Parse comma-separated identifiers (numbers or strings)
+            dataset_identifiers = []
+            for identifier in user_input.split(','):
+                identifier = identifier.strip()
+                if identifier:
+                    # Try to convert to int if it's a number, otherwise keep as string
+                    try:
+                        dataset_identifiers.append(int(identifier))
+                    except ValueError:
+                        dataset_identifiers.append(identifier)
+            
+            if not dataset_identifiers:
+                print("ERROR Please enter valid dataset identifiers.")
                 continue
                 
-            # Remove duplicates and sort
-            dataset_numbers = sorted(list(set(dataset_numbers)))
+            # Remove duplicates while preserving order and mixed types
+            seen = set()
+            unique_identifiers = []
+            for item in dataset_identifiers:
+                if item not in seen:
+                    seen.add(item)
+                    unique_identifiers.append(item)
             
-            print(f"SUCCESS Selected datasets: {', '.join(map(str, dataset_numbers))}")
-            return dataset_numbers
+            # Validate that datasets exist
+            valid_identifiers = []
+            for identifier in unique_identifiers:
+                identifier_str = str(identifier)
+                found = False
+                
+                # If identifier already starts with 'dataset_', don't add it again
+                if identifier_str.startswith('dataset_'):
+                    # Try as-is first
+                    dataset_path = Path(f"{dataset_folder}/{identifier_str}")
+                    if dataset_path.exists():
+                        valid_identifiers.append(identifier)
+                        found = True
+                    else:
+                        # Also try without the prefix (in case folder name doesn't have dataset_)
+                        dataset_path_no_prefix = Path(f"{dataset_folder}/{identifier_str.replace('dataset_', '', 1)}")
+                        if dataset_path_no_prefix.exists():
+                            valid_identifiers.append(identifier)
+                            found = True
+                else:
+                    # Try with dataset_ prefix first (for numbered datasets like 1, 2, 3)
+                    dataset_path = Path(f"{dataset_folder}/dataset_{identifier_str}")
+                    if dataset_path.exists():
+                        valid_identifiers.append(identifier)
+                        found = True
+                    else:
+                        # Try without dataset_ prefix (for merged datasets, etc.)
+                        dataset_path_no_prefix = Path(f"{dataset_folder}/{identifier_str}")
+                        if dataset_path_no_prefix.exists():
+                            valid_identifiers.append(identifier)
+                            found = True
+                
+                if not found:
+                    print(f"WARNING  Dataset '{identifier_str}' not found in {dataset_folder}/")
             
-        except ValueError:
-            print("ERROR Please enter valid numbers separated by commas (e.g., 1,2,3)")
+            if not valid_identifiers:
+                print("ERROR No valid datasets found. Please check your dataset names/numbers.")
+                continue
+            
+            print(f"SUCCESS Selected datasets: {', '.join(map(str, valid_identifiers))}")
+            if len(valid_identifiers) != len(unique_identifiers):
+                print(f" Note: Only {len(valid_identifiers)} out of {len(unique_identifiers)} datasets were found and will be used.")
+            
+            return valid_identifiers
+            
         except KeyboardInterrupt:
             print("\nERROR Operation cancelled by user.")
             return None
@@ -118,21 +402,131 @@ def get_training_mode():
             print("\nERROR Operation cancelled by user.")
             return None
 
-def get_report_name():
+def reorder_datasets(dataset_identifiers):
+    """Allow user to reorder datasets for progressive training"""
+    if len(dataset_identifiers) <= 1:
+        return dataset_identifiers
+    
+    print("\n" + "="*60)
+    print("DATASET TRAINING ORDER")
+    print("="*60)
+    print("For progressive training, the order matters!")
+    print("Each dataset will train using the best model from the previous dataset.")
+    print()
+    print("Current order:")
+    for i, dataset in enumerate(dataset_identifiers, 1):
+        print(f"  {i}. {dataset}")
+    print()
+    
+    while True:
+        try:
+            user_input = input("Do you want to change the order? (y/n): ").strip().lower()
+            
+            if user_input in ['n', 'no']:
+                print("SUCCESS Keeping current order")
+                return dataset_identifiers
+            elif user_input in ['y', 'yes']:
+                break
+            else:
+                print("ERROR Please enter 'y' for yes or 'n' for no")
+                continue
+        except KeyboardInterrupt:
+            print("\nERROR Operation cancelled by user.")
+            return None
+    
+    # Let user reorder
+    print("\nEnter the new order by typing dataset identifiers separated by commas.")
+    print("Example: 3, 1, 2")
+    print()
+    
+    while True:
+        try:
+            order_input = input("Enter new order: ").strip()
+            if not order_input:
+                print("ERROR Please enter the dataset order.")
+                continue
+            
+            # Parse the new order
+            new_order = []
+            for item in order_input.split(','):
+                item = item.strip()
+                if item:
+                    # Try to convert to int if it's a number
+                    try:
+                        new_order.append(int(item))
+                    except ValueError:
+                        new_order.append(item)
+            
+            # Validate that all datasets are included
+            if len(new_order) != len(dataset_identifiers):
+                print(f"ERROR You must include all {len(dataset_identifiers)} datasets. You entered {len(new_order)}.")
+                continue
+            
+            # Check that all datasets are valid
+            missing = []
+            for dataset in new_order:
+                if dataset not in dataset_identifiers:
+                    missing.append(dataset)
+            
+            if missing:
+                print(f"ERROR Invalid datasets: {', '.join(map(str, missing))}")
+                print(f"       Available: {', '.join(map(str, dataset_identifiers))}")
+                continue
+            
+            # Check for duplicates
+            if len(new_order) != len(set(new_order)):
+                print("ERROR Duplicate datasets detected. Each dataset should appear only once.")
+                continue
+            
+            # Display new order
+            print("\nSUCCESS New training order:")
+            for i, dataset in enumerate(new_order, 1):
+                print(f"  {i}. {dataset}")
+            
+            # Confirm
+            confirm = input("\nConfirm this order? (y/n): ").strip().lower()
+            if confirm in ['y', 'yes']:
+                return new_order
+            else:
+                print("Let's try again...")
+                continue
+                
+        except KeyboardInterrupt:
+            print("\nERROR Operation cancelled by user.")
+            return None
+
+def get_report_name(progressive_mode=False, num_datasets=1):
     """Get custom report name from user"""
     while True:
         try:
-            user_input = input("\nEnter the name for the training run (will be saved in runs/detect/[name]): ").strip()
+            if progressive_mode or num_datasets == 1:
+                # For progressive training or single dataset, use one run name
+                user_input = input("\nEnter the name for the training run (or press Enter to use dataset name): ").strip()
+            else:
+                # For multiple datasets without progressive, suggest separate names
+                print("\n" + "="*60)
+                print("TRAINING RUN NAMING")
+                print("="*60)
+                print("You are training multiple datasets separately.")
+                print("Options:")
+                print("  1. Press Enter to use dataset names (recommended)")
+                print("  2. Enter a custom name to use the same name for all runs")
+                user_input = input("\nEnter custom name or press Enter for dataset names: ").strip()
+            
             if not user_input:
-                print("ERROR Please enter a valid name.")
-                continue
+                # Use dataset names
+                print("SUCCESS Will use individual dataset names for each run")
+                return None
             
             # Remove invalid characters for folder names
             invalid_chars = '<>:"/\\|?*'
             for char in invalid_chars:
                 user_input = user_input.replace(char, '_')
             
-            print(f"SUCCESS Training results will be saved as: runs/detect/{user_input}_dataset_X")
+            if progressive_mode or num_datasets == 1:
+                print(f"SUCCESS Training results will be saved as: runs/detect/{user_input}/")
+            else:
+                print(f"SUCCESS All training results will be saved as: runs/detect/{user_input}/")
             return user_input
             
         except KeyboardInterrupt:
@@ -141,7 +535,7 @@ def get_report_name():
 
 def find_best_model(run_name, dataset_num, fallback_model='yolo11m.pt'):
     """Find the best.pt file from a previous training run"""
-    run_path = Path(f"runs/detect/{run_name}_dataset_{dataset_num}")
+    run_path = Path(f"runs/detect/{run_name}")
     best_model_path = run_path / "weights" / "best.pt"
     
     if best_model_path.exists():
@@ -151,7 +545,8 @@ def find_best_model(run_name, dataset_num, fallback_model='yolo11m.pt'):
         return fallback_model
 
 def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", previous_dataset_num=None, 
-                        base_model='yolo11m.pt', config_path=None):
+                        previous_run_name=None, base_model='yolo11m.pt', config_path=None, 
+                        dataset_folder='dataset_yolo_format'):
     """Train a single dataset and return results"""
     print(f"\n{'='*60}")
     print(f"LAUNCH Starting training on Dataset {dataset_num}")
@@ -159,7 +554,9 @@ def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", p
     
     # Determine which model to use
     if progressive_mode and previous_dataset_num is not None:
-        model_path = find_best_model(run_name, previous_dataset_num, base_model)
+        # Use previous_run_name if provided, otherwise use run_name
+        prev_run = previous_run_name if previous_run_name else run_name
+        model_path = find_best_model(prev_run, previous_dataset_num, base_model)
         print(f"PROCESSING Progressive training: Using {model_path}")
     else:
         model_path = base_model
@@ -174,9 +571,56 @@ def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", p
         model = YOLO(model_path)
         
         # Prepare basic training parameters
+        # Check if dataset exists with or without dataset_ prefix
+        dataset_path_with_prefix = Path(f'{dataset_folder}/dataset_{dataset_num}/dataset.yaml')
+        dataset_path_without_prefix = Path(f'{dataset_folder}/{dataset_num}/dataset.yaml')
+        
+        if dataset_path_with_prefix.exists():
+            dataset_yaml_path = dataset_path_with_prefix
+            actual_dataset_folder = dataset_path_with_prefix.parent
+        elif dataset_path_without_prefix.exists():
+            dataset_yaml_path = dataset_path_without_prefix
+            actual_dataset_folder = dataset_path_without_prefix.parent
+        else:
+            raise FileNotFoundError(
+                f"Dataset not found in '{dataset_folder}': tried 'dataset_{dataset_num}' and '{dataset_num}'"
+            )
+        
+        # Fix the path field in dataset.yaml if it's incorrect
+        # YOLO uses the 'path' field to resolve image paths, so it must be correct
+        try:
+            with open(dataset_yaml_path, 'r', encoding='utf-8') as f:
+                yaml_content = f.read()
+                yaml_data = yaml.safe_load(yaml_content)
+            
+            # Update path to point to the actual dataset folder
+            correct_path = str(actual_dataset_folder.absolute())
+            current_path = yaml_data.get('path', '')
+            
+            if current_path != correct_path:
+                # Read original file to preserve formatting
+                lines = yaml_content.split('\n')
+                output_lines = []
+                path_updated = False
+                
+                for line in lines:
+                    if line.strip().startswith('path:') and not path_updated:
+                        output_lines.append(f'path: {correct_path}')
+                        path_updated = True
+                    else:
+                        output_lines.append(line)
+                
+                # Write back the corrected yaml
+                with open(dataset_yaml_path, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(output_lines))
+                print(f"SETTINGS  Updated dataset.yaml path: {current_path} → {correct_path}")
+        except Exception as e:
+            print(f"WARNING  Could not update dataset.yaml path: {e}")
+            print(f"         Make sure the 'path' field in dataset.yaml points to: {actual_dataset_folder.absolute()}")
+        
         train_params = {
-            'data': f'dataset_yolo_format/dataset_{dataset_num}/dataset.yaml',
-            'name': f'{run_name}_dataset_{dataset_num}'
+            'data': str(dataset_yaml_path),
+            'name': run_name
         }
         
         # Use config file if available, otherwise use basic defaults
@@ -203,7 +647,7 @@ def train_single_dataset(dataset_num, progressive_mode=False, run_name="test", p
         
         print(f"\nSUCCESS Dataset {dataset_num} training completed!")
         print(f"TIME  Training time: {int(hours)}h {int(minutes)}m")
-        print(f"FOLDER Results saved in: runs/detect/{run_name}_dataset_{dataset_num}/")
+        print(f"FOLDER Results saved in: runs/detect/{run_name}/")
         
         # Print final metrics
         try:
@@ -251,33 +695,82 @@ def main():
     print("TIP You can stop anytime with Ctrl+C")
     print("=" * 60)
     
+    # Initialize settings manager
+    settings_manager = SettingsManager()
+    
+    # Main menu loop
+    while True:
+        print("\n" + "="*60)
+        print("MAIN MENU")
+        print("="*60)
+        print("1. Train datasets")
+        print("2. Settings")
+        print("3. Exit")
+        
+        try:
+            menu_choice = input("\nSelect option (1-3): ").strip()
+            
+            if menu_choice == '1':
+                # Start training workflow
+                break
+            elif menu_choice == '2':
+                manage_settings(settings_manager)
+                continue
+            elif menu_choice == '3':
+                print("EXIT Goodbye!")
+                return
+            else:
+                print("ERROR Invalid choice. Please enter 1-3")
+                continue
+        except KeyboardInterrupt:
+            print("\n\nEXIT Goodbye!")
+            return
+    
     # Check for training configuration file
     config_path = check_config_file()
     
+    # Get dataset folder from user input
+    dataset_folder = get_dataset_folder()
+    if dataset_folder is None:
+        print("ERROR Dataset folder selection cancelled.")
+        return
+    
     # Get user inputs
-    dataset_numbers = get_dataset_numbers()
-    if dataset_numbers is None:
+    dataset_identifiers = get_dataset_identifiers(dataset_folder)
+    if dataset_identifiers is None:
         return
     
     progressive_mode = get_training_mode()
     if progressive_mode is None:
         return
     
+    # If progressive training and multiple datasets, allow reordering
+    if progressive_mode and len(dataset_identifiers) > 1:
+        dataset_identifiers = reorder_datasets(dataset_identifiers)
+        if dataset_identifiers is None:
+            print("ERROR Dataset ordering cancelled.")
+            return
+    
     base_model = get_model_selection()
     if base_model is None:
         return
     
-    run_name = get_report_name()
-    if run_name is None:
-        return
+    run_name = get_report_name(progressive_mode=progressive_mode, num_datasets=len(dataset_identifiers))
+    # run_name can be None (use dataset names), which is valid
     
     # Display training plan
     print(f"\nLIST TRAINING PLAN:")
-    print(f"CHART Datasets to train: {', '.join(map(str, dataset_numbers))}")
+    print(f"CHART Datasets to train: {', '.join(map(str, dataset_identifiers))}")
+    print(f"FOLDER Dataset folder: {dataset_folder}")
     print(f"PROCESSING Progressive training: {'Yes' if progressive_mode else 'No'}")
     print(f"MODEL Base model: {Path(base_model).name}")
     print(f"SETTINGS  Configuration: {config_path if config_path else 'YOLO defaults'}")
-    print(f"FOLDER Results will be saved in: runs/detect/{run_name}_dataset_X/")
+    
+    if run_name:
+        print(f"FOLDER Results will be saved in: runs/detect/{run_name}/")
+    else:
+        print(f"FOLDER Results will be saved in: runs/detect/dataset_[name]/ (separate for each)")
+    
     print(f"TIME  Estimated time per dataset: 2-5 hours (depending on GPU and dataset size)")
     print("=" * 60)
     
@@ -294,29 +787,48 @@ def main():
     results_summary = []
     overall_start_time = time.time()
     
-    for i, dataset_num in enumerate(dataset_numbers):
+    for i, dataset_identifier in enumerate(dataset_identifiers):
         try:
-            # For progressive training, use the previous dataset number (if available)
-            previous_dataset = dataset_numbers[i-1] if progressive_mode and i > 0 else None
+            # Determine the run name for this dataset
+            if run_name:
+                # Use the custom run name provided by user
+                current_run_name = run_name
+            else:
+                # Use dataset identifier as run name
+                current_run_name = f"dataset_{dataset_identifier}"
+            
+            # For progressive training, use the previous dataset identifier (if available)
+            previous_dataset = dataset_identifiers[i-1] if progressive_mode and i > 0 else None
+            
+            # Determine previous run name for progressive training
+            if progressive_mode and previous_dataset is not None:
+                if run_name:
+                    previous_run_name = run_name
+                else:
+                    previous_run_name = f"dataset_{previous_dataset}"
+            else:
+                previous_run_name = None
             
             result = train_single_dataset(
-                dataset_num=dataset_num,
+                dataset_num=dataset_identifier,
                 progressive_mode=progressive_mode,
-                run_name=run_name,
+                run_name=current_run_name,
                 previous_dataset_num=previous_dataset,
+                previous_run_name=previous_run_name,
                 base_model=base_model,
-                config_path=config_path
+                config_path=config_path,
+                dataset_folder=dataset_folder
             )
             results_summary.append(result)
             
             # Brief pause between trainings
-            if i < len(dataset_numbers) - 1:  # Not the last dataset
+            if i < len(dataset_identifiers) - 1:  # Not the last dataset
                 print(f"\nPAUSE  Brief pause before next dataset...")
                 time.sleep(5)
             
         except KeyboardInterrupt:
             print(f"\n\nSTOP Training interrupted by user!")
-            print(f"CHART Completed datasets so far: {[r['dataset'] for r in results_summary if r['success']]}")
+            print(f"CHART Completed datasets so far: {[r['dataset'] for r in results_summary if r.get('success', False)]}")
             break
         except Exception as e:
             print(f"\nERROR Unexpected error: {e}")
@@ -330,7 +842,12 @@ def main():
     print(f"\n{'='*80}")
     print(f" TRAINING SUMMARY")
     print(f"{'='*80}")
-    print(f"CHART Run Name: {run_name}")
+    
+    if run_name:
+        print(f"CHART Run Name: {run_name}")
+    else:
+        print(f"CHART Run Names: Individual dataset names (dataset_[name])")
+    
     print(f"PROCESSING Training Mode: {'Progressive' if progressive_mode else 'Normal'}")
     print(f"MODEL Base Model: {Path(base_model).name}")
     print(f"SETTINGS  Configuration: {config_path if config_path else 'YOLO defaults'}")
@@ -367,7 +884,15 @@ def main():
         for result in failed_trainings:
             print(f"   Dataset {result['dataset']}: {result.get('error', 'Unknown error')}")
     
-    print(f"\nFOLDER All results saved in: runs/detect/{run_name}_dataset_X/")
+    if run_name:
+        print(f"\nFOLDER All results saved in: runs/detect/{run_name}/")
+    else:
+        print(f"\nFOLDER Results saved in separate folders: runs/detect/dataset_[name]/")
+        if successful_trainings:
+            print(f"FOLDER Trained datasets:")
+            for result in successful_trainings:
+                print(f"       - runs/detect/{result['run_name']}/")
+    
     print(f"SEARCH Check individual result folders for detailed metrics and visualizations")
     print(f"{'='*80}")
 

@@ -19,8 +19,9 @@ from create_individual_datasets import IndividualDatasetCreator, get_folder_iden
 try:
     from train_datasets import (
         check_config_file, get_available_models, get_model_selection, 
-        get_dataset_numbers, get_training_mode, get_report_name,
-        train_single_dataset
+        get_training_mode, get_report_name, train_single_dataset,
+        SettingsManager as TrainingSettingsManager, manage_settings,
+        get_dataset_folder, list_available_datasets, get_shuffle_option
     )
     TRAINING_AVAILABLE = True
 except ImportError as e:
@@ -50,6 +51,14 @@ try:
 except ImportError as e:
     print(f"WARNING  Watermark remover functionality not available: {e}")
     WATERMARK_REMOVER_AVAILABLE = False
+
+# Import dataset merger functionality
+try:
+    from dataset_merger import DatasetMerger
+    DATASET_MERGER_AVAILABLE = True
+except ImportError as e:
+    print(f"WARNING  Dataset merger functionality not available: {e}")
+    DATASET_MERGER_AVAILABLE = False
 
 class SettingsManager:
     def __init__(self, settings_file="settings.txt"):
@@ -135,24 +144,25 @@ class DataProcessingToolkit:
     def show_main_menu(self):
         """Display the main menu options"""
         print("\n" + "="*60)
-        print("TOOLS  DATA PROCESSING TOOLKIT")
+        print("TOOLS - Data Processing Toolkit")
         print("="*60)
         print("Choose an operation:")
-        print("1. DOCUMENT Convert format (Supervisely → YOLO → Darknet)")
-        print("2. TRAINING  Train/evaluate datasets")
-        print("3. VIDEO Video operations (split video/remove watermark)")
-        print("4. ERROR Exit")
+        print("1. Convert format (Supervisely → YOLO → Darknet)")
+        print("2. Train/evaluate datasets")
+        print("3. Video operations (split video/remove watermark)")
+        print("4. Merge YOLO datasets")
+        print("5. Exit")
         print("="*60)
         
     def get_user_choice(self):
         """Get and validate user menu choice"""
         while True:
             try:
-                choice = int(input("Enter your choice (1-4): ").strip())
-                if 1 <= choice <= 4:
+                choice = int(input("Enter your choice (1-5): ").strip())
+                if 1 <= choice <= 5:
                     return choice
                 else:
-                    print("ERROR Please choose a number between 1 and 4.")
+                    print("ERROR Please choose a number between 1 and 5.")
             except ValueError:
                 print("ERROR Please enter a valid number.")
             except KeyboardInterrupt:
@@ -363,7 +373,7 @@ class DataProcessingToolkit:
             print("2. Evaluate trained models")
             print("3. Quick results summary")
             print("4. Compare model performance (Coming soon)")
-            print("5. SETTINGS  Training settings (Coming soon)")
+            print("5. SETTINGS  Training settings")
             print("6. ← Back to main menu")
             
             try:
@@ -379,8 +389,7 @@ class DataProcessingToolkit:
                     print(" Model comparison coming soon!")
                     break
                 elif choice == 5:
-                    print(" Training settings coming soon!")
-                    break
+                    self.manage_training_settings()
                 elif choice == 6:
                     break
                 else:
@@ -404,9 +413,15 @@ class DataProcessingToolkit:
             # Check for training configuration file
             config_path = check_config_file()
             
+            # Get dataset folder from user input
+            dataset_folder = get_dataset_folder()
+            if dataset_folder is None:
+                print("ERROR Dataset folder selection cancelled.")
+                return
+            
             # Get user inputs using enhanced dataset selection
             print("CHART Select datasets to train:")
-            dataset_identifiers = self.get_dataset_identifiers_for_training()
+            dataset_identifiers = self.get_dataset_identifiers_for_training(dataset_folder)
             if dataset_identifiers is None:
                 print("ERROR Operation cancelled.")
                 return
@@ -429,13 +444,21 @@ class DataProcessingToolkit:
                 print("ERROR Operation cancelled.")
                 return
             
+            # Get shuffle option
+            shuffle = get_shuffle_option()
+            if shuffle is None:
+                print("ERROR Shuffle option selection cancelled.")
+                return
+            
             # Display training plan
             print(f"\nLIST TRAINING PLAN:")
             print(f"CHART Datasets to train: {', '.join(map(str, dataset_identifiers))}")
+            print(f"FOLDER Dataset folder: {dataset_folder}")
             print(f"PROCESSING Progressive training: {'Yes' if progressive_mode else 'No'}")
             print(f"MODEL Base model: {Path(base_model).name}")
             print(f"SETTINGS  Configuration: {config_path if config_path else 'YOLO defaults'}")
-            print(f"FOLDER Results will be saved in: runs/detect/{run_name}_dataset_X/")
+            print(f"SETTINGS  Shuffle: {shuffle}")
+            print(f"FOLDER Results will be saved in: runs/detect/{run_name}/")
             print(f"TIME  Estimated time per dataset: 2-5 hours (depending on GPU and dataset size)")
             print("=" * 60)
             
@@ -458,10 +481,28 @@ class DataProcessingToolkit:
             
             for i, dataset_identifier in enumerate(dataset_identifiers):
                 try:
-                    # Check if dataset exists
-                    dataset_path = Path(f"dataset_yolo_format/dataset_{dataset_identifier}/dataset.yaml")
-                    if not dataset_path.exists():
-                        print(f"ERROR Dataset {dataset_identifier} not found at {dataset_path}")
+                    # Check if dataset exists in the default folder location
+                    dataset_identifier_str = str(dataset_identifier)
+                    dataset_path = None
+                    
+                    # Try multiple naming conventions in the default folder
+                    # Try with dataset_ prefix
+                    test_path = Path(f"{dataset_folder}/dataset_{dataset_identifier_str}/dataset.yaml")
+                    if test_path.exists():
+                        dataset_path = test_path
+                    else:
+                        # Try without dataset_ prefix
+                        test_path = Path(f"{dataset_folder}/{dataset_identifier_str}/dataset.yaml")
+                        if test_path.exists():
+                            dataset_path = test_path
+                        # If identifier already has dataset_ prefix, try as-is
+                        elif dataset_identifier_str.startswith('dataset_'):
+                            test_path = Path(f"{dataset_folder}/{dataset_identifier_str}/dataset.yaml")
+                            if test_path.exists():
+                                dataset_path = test_path
+                    
+                    if not dataset_path or not dataset_path.exists():
+                        print(f"ERROR Dataset {dataset_identifier} not found in {dataset_folder}")
                         continue
                     
                     # For progressive training, use the previous dataset identifier (if available)
@@ -473,7 +514,9 @@ class DataProcessingToolkit:
                         run_name=run_name,
                         previous_dataset_num=previous_dataset,
                         base_model=base_model,
-                        config_path=config_path
+                        config_path=config_path,
+                        dataset_folder=dataset_folder,
+                        shuffle=shuffle
                     )
                     results_summary.append(result)
                     
@@ -544,20 +587,61 @@ class DataProcessingToolkit:
             for result in failed_trainings:
                 print(f"   Dataset {result['dataset']}: {result.get('error', 'Unknown error')}")
         
-        print(f"\nFOLDER All results saved in: runs/detect/{run_name}_dataset_X/")
+        print(f"\nFOLDER All results saved in: runs/detect/{run_name}/")
         print(f"SEARCH Check individual result folders for detailed metrics and visualizations")
         print(f"{'='*80}")
         
         input("\nPress Enter to continue...")
     
-    def get_dataset_identifiers_for_training(self):
+    def manage_training_settings(self):
+        """Manage training settings"""
+        if not TRAINING_AVAILABLE:
+            print("\nERROR Training functionality is not available!")
+            print("Settings require train_datasets.py to be available.")
+            input("\nPress Enter to continue...")
+            return
+        
+        # Create a training settings manager (use the one from train_datasets)
+        training_settings = TrainingSettingsManager()
+        
+        # Use the manage_settings function from train_datasets
+        manage_settings(training_settings)
+    
+    def get_dataset_identifiers_for_training(self, dataset_folder='dataset_yolo_format'):
         """Get dataset identifiers (numbers or names) for training from user input"""
+        # First, list all available datasets
+        available_datasets = list_available_datasets(dataset_folder)
+        
+        if not available_datasets:
+            print(f"ERROR No datasets found in {dataset_folder}")
+            return None
+        
+        print("\n" + "="*60)
+        print("AVAILABLE DATASETS")
+        print("="*60)
+        for i, dataset in enumerate(available_datasets, 1):
+            # Display both the identifier and the folder name
+            if isinstance(dataset, int):
+                folder_name = f"dataset_{dataset}"
+            else:
+                folder_name = str(dataset)
+            
+            print(f"  {i}. {dataset} (folder: {folder_name})")
+        print("="*60)
+        print(f"\nTIP You can type 'all' to train all {len(available_datasets)} datasets")
+        print("TIP Or enter specific dataset names/numbers separated by commas")
+        
         while True:
             try:
-                user_input = input("\nEnter dataset names separated by commas (e.g., 1,2,bird_dataset,annotated_lizards): ").strip()
+                user_input = input("\nEnter dataset names/numbers (or 'all' for all datasets): ").strip()
                 if not user_input:
-                    print("ERROR Please enter at least one dataset identifier.")
+                    print("ERROR Please enter at least one dataset identifier or 'all'.")
                     continue
+                
+                # Check if user wants all datasets
+                if user_input.lower() == 'all':
+                    print(f"SUCCESS Selected all {len(available_datasets)} datasets")
+                    return available_datasets
                 
                 # Parse comma-separated identifiers (numbers or strings)
                 dataset_identifiers = []
@@ -582,14 +666,42 @@ class DataProcessingToolkit:
                         seen.add(item)
                         unique_identifiers.append(item)
                 
-                # Validate that datasets exist
+                # Validate that datasets exist in the provided folder location
                 valid_identifiers = []
                 for identifier in unique_identifiers:
-                    dataset_path = Path(f"dataset_yolo_format/dataset_{identifier}")
-                    if dataset_path.exists():
-                        valid_identifiers.append(identifier)
+                    # Convert identifier to string for path operations
+                    identifier_str = str(identifier)
+                    found = False
+                    
+                    # Check in the default folder location
+                    # If identifier already starts with 'dataset_', don't add it again
+                    if identifier_str.startswith('dataset_'):
+                        # Try as-is first
+                        dataset_path = Path(f"{dataset_folder}/{identifier_str}")
+                        if dataset_path.exists():
+                            valid_identifiers.append(identifier)
+                            found = True
+                        else:
+                            # Also try without the prefix (in case folder name doesn't have dataset_)
+                            dataset_path_no_prefix = Path(f"{dataset_folder}/{identifier_str.replace('dataset_', '', 1)}")
+                            if dataset_path_no_prefix.exists():
+                                valid_identifiers.append(identifier)
+                                found = True
                     else:
-                        print(f"WARNING  Dataset 'dataset_{identifier}' not found in dataset_yolo_format/")
+                        # Try with dataset_ prefix first (for numbered datasets like 1, 2, 3)
+                        dataset_path = Path(f"{dataset_folder}/dataset_{identifier_str}")
+                        if dataset_path.exists():
+                            valid_identifiers.append(identifier)
+                            found = True
+                        else:
+                            # Try without dataset_ prefix (for merged datasets, etc.)
+                            dataset_path_no_prefix = Path(f"{dataset_folder}/{identifier_str}")
+                            if dataset_path_no_prefix.exists():
+                                valid_identifiers.append(identifier)
+                                found = True
+                    
+                    if not found:
+                        print(f"WARNING  Dataset '{identifier_str}' not found in {dataset_folder}/")
                 
                 if not valid_identifiers:
                     print("ERROR No valid datasets found. Please check your dataset names/numbers.")
@@ -954,6 +1066,33 @@ class DataProcessingToolkit:
         print("\nTIP After setup, restart this program to use video splitting!")
         print("="*60)
     
+    def merge_yolo_datasets(self):
+        """Merge multiple YOLO datasets using existing functionality"""
+        print("\n" + "="*50)
+        print("MERGE YOLO DATASET MERGER")
+        print("="*50)
+        
+        if not DATASET_MERGER_AVAILABLE:
+            print("ERROR Dataset merger functionality is not available!")
+            print("Please ensure you have:")
+            print("  • PyYAML package installed (pip install pyyaml)")
+            print("  • Pillow package installed (pip install pillow)")
+            print("  • dataset_merger.py in the same directory")
+            input("\nPress Enter to continue...")
+            return
+        
+        print("LAUNCH Launching dataset merger...")
+        print("TIP This tool merges multiple YOLO datasets into a single dataset")
+        
+        try:
+            merger = DatasetMerger()
+            merger.merge_datasets()
+        except Exception as e:
+            print(f"ERROR Error running dataset merger: {e}")
+            print("Please check your setup and try again.")
+        
+        input("\nPress Enter to continue...")
+    
     def run(self):
         """Main program loop"""
         print("LAUNCH Welcome to the Data Processing Toolkit!")
@@ -970,6 +1109,8 @@ class DataProcessingToolkit:
                 elif choice == 3:
                     self.video_operations_menu()
                 elif choice == 4:
+                    self.merge_yolo_datasets()
+                elif choice == 5:
                     print("\nEXIT Thank you for using the Data Processing Toolkit!")
                     print("Goodbye! COMPLETE")
                     break

@@ -1,5 +1,0 @@
-{
-  "default_input_folder": "dataset_supervisely_format",
-  "default_output_folder": "dataset_yolo_format",
-  "default_results_folder": "runs/detect"
-}

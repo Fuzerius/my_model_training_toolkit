@@ -9,8 +9,8 @@ import json
 import os
 
 def load_settings():
-    """Load settings from settings.txt"""
-    settings_file = Path("settings.txt")
+    """Load settings from settings/quick_results_summary.json"""
+    settings_file = Path("settings/quick_results_summary.json")
     default_settings = {
         "default_results_folder": "runs/detect"
     }
@@ -98,6 +98,7 @@ def get_folder_selection(available_folders):
             
             # Parse comma-separated numbers
             selected_indices = []
+            valid_input = True
             for num_str in user_input.split(','):
                 num_str = num_str.strip()
                 if num_str:
@@ -106,14 +107,14 @@ def get_folder_selection(available_folders):
                         selected_indices.append(idx)
                     else:
                         print(f"ERROR Invalid number: {num_str}. Please use numbers 1-{len(available_folders)}")
+                        valid_input = False
                         break
-            else:
-                # If we didn't break, all numbers were valid
+            
+            if valid_input and selected_indices:
                 selected_folders = [available_folders[i] for i in selected_indices]
-                if selected_folders:
-                    return selected_folders
-                
-            print("ERROR Please enter valid folder numbers.")
+                return selected_folders
+            elif valid_input:
+                print("ERROR Please enter valid folder numbers.")
             
         except ValueError:
             print("ERROR Please enter valid numbers separated by commas.")
